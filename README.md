@@ -13,7 +13,7 @@ The hackathon focused on implementing such an API based on POSIX sockets. This a
 ### Architecture
 The resulting “BP Sockets” interface integrates with bundle protocol stacks in user space. Netlink IPC (Inter-Process Communication) coordinates kernel and user space interactions. The main elements of the architecture are described below.
 
-![Architecture](architecture.png)
+![Architecture](img-architecture.png)
 
 #### BP Sockets Application
 The user application creates a socket with a newly introduced address family 28, with the datagram (DGRAM) type and protocol number 0. The destination EID is provided via the sockaddr parameter of the sendto() function, and the Application Data Unit (ADU) to be conveyed via BP is provided in the message field.
@@ -38,7 +38,7 @@ Four members: Olivier De Jonckere (Montpellier University), Brian Sipos (APL), R
 ### Outcome
 During the hackathon, we developed a proof-of-concept for BP Sockets. It was demonstrated by transmitting bundles from a minimal user space application through the Linux kernel and ION to µD3TN using BP Sockets. The screenshot below shows the µD3TN log (the receiving BP node) on the top, the BP Sockets App sender on the bottom left, and the BP App receiver output on the bottom right. 
 
-![Screenshot](screenshot.png)
+![Screenshot](img-screenshot.png)
 
 ### Code
 The resulting BP Socket code developed during the hackathon is publicly available in this GitHub repository: https://github.com/juanfraire/bp-sockets. Here is a brief explanation of the components:
