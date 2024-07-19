@@ -74,14 +74,14 @@ The source code files are located in the `bp-sock` directory. They implement the
     - `struct proto` and `struct proto_ops` are used to define the custom protocol operations and socket properties.
     - Main Operations:
         - `custom_create`: Initializes and allocates resources for a new socket.
-        - Sets the socket operations.
-        - Allocates a new socket (`sk_alloc`).
-        - Initializes socket data (`sock_init_data`).
+            - Sets the socket operations.
+            - Allocates a new socket (`sk_alloc`).
+            - Initializes socket data (`sock_init_data`).
         - `custom_release`: Cleans up and releases resources when a socket is closed.
-        - Puts the socket (`sock_put`).
+            - Puts the socket (`sock_put`).
         - `custom_sendmsg`: Handles sending messages through the custom protocol.
-        - Allocates memory for the data to be sent.
-        - Copies data from user space to kernel space (`copy_from_iter`).
+            - Allocates memory for the data to be sent.
+            - Copies data from user space to kernel space (`copy_from_iter`).
 - `netlink.c`: Handle IPC using Netlink.
 
 To deploy the kernel module, use the following commands:
