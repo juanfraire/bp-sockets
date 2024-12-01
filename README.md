@@ -2,7 +2,7 @@
 
 The outcome of STINT 2024 Hackathon. Authored by Scott Burleigh (APL), Felix Walter (D3TN), Olivier De Jonckere (LIRMM), Juan Fraire (Inria), Brian Sipos (APL), Samo Grasic (ICTP), Brian Tomko (NASA), and Ricardo Lent (UH).
 
-> 🛈 STINT
+> 🛈 STINT:
 > The Space-Terrestrial Internetworking (STINT) Workshop brings together space networking research and the industrial community's interest in Delay and Disruption-Tolerant Networking (DTN). Sponsored by IPNSIG and D3TN, the 11th edition of STINT was held at the IEEE SMC-IT/SSC conference in Mountain View, California.
 
 ## Table of Contents
@@ -161,7 +161,7 @@ To deploy the B daemon, use the following commands:
 
 To set up the development environment outlined in the [Architecture](#architecture) section, prepare two virtual machines (VM1 and VM2). First, download the following image: [debian-12-generic-amd64.qcow2](https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-generic-amd64.qcow2).
 
-> ⚠️ IMPORTANT
+> ⚠️ IMPORTANT:
 > It is highly recommended to use `ion-node` (VM1) as your development environment. This VM already includes the necessary tools and dependencies like `just`, `make`, and `python3-jinja2`. By working directly on VM1, you can simplify testing and avoid additional setup on your local machine.
 
 ### Requirements
@@ -214,12 +214,19 @@ virt-install --name ion-node \
 ssh debian@<ADDRESS>
 ```
 
-3. [From `ion-node`] Set Up ION and bp-sockets
+3. [From `ion-node`] Switch to `root` user
+
+```bash
+sudo -i
+```
+
+4. [From `ion-node`] Set Up ION and bp-sockets
 
 Navigate to the `bp-sockets` project directory and configure as follows:
 
 ```bash
 cd /home/debian/bp-sockets
+export LD_LIBRARY_PATH="/usr/local/lib"
 
 # Start ION
 just ion host <ADDRESS_SOURCE> <ADDRESS_DESTINATION> > host.rc
@@ -234,7 +241,17 @@ sudo insmod bp.ko
 # Set up bp-daemon
 cd ../bp-daemon
 make
-LD_LIBRARY_PATH=/usr/local/lib ./bp_daemon
+./bp_daemon
+```
+
+5. [From `ion-node`] Build and run user-space demo application
+
+```bash
+cd /home/debian/bp-sockets
+
+gcc -o bp-user-app-with-sock bp-user-app-with-sock.c
+./bp-user-app-with-sock ipn:<HOST_ID_DESTINATION>.1
+# Example for '192.168.122.182': ./bp-user-app-with-sock ipn:182.1
 ```
 
 #### VM2 Setup: `ud3tn-node`
@@ -258,7 +275,13 @@ virt-install --name ud3tn-node \
 ssh debian@<ADDRESS>
 ```
 
-3. [From `ud3tn-node`] Start the uD3TN
+3. [From `ud3tn-node`] Switch to `root` user
+
+```bash
+sudo -i
+```
+
+4. [From `ud3tn-node`] Start the uD3TN
 
 ```bash
 cd /home/debian/ud3tn
@@ -275,7 +298,7 @@ build/posix/ud3tn \
 # --cla "tcpclv3:*,4556" -L 4
 ```
 
-4. [From `ud3tn-node`] Run the AAP2 Receiver in another terminal
+5. [From `ud3tn-node`] Run the AAP2 Receiver in another terminal
 
 ```bash
 cd /home/debian/ud3tn

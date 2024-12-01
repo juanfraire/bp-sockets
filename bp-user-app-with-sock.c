@@ -10,9 +10,13 @@
 
 #define AF_BP 28
 
-int main() {
+int main(int argc, char *argv[]) {
     int sockfd, ret;
     // struct sockaddr_in sa; // Standard socket address structure
+    if (argc < 2) {
+        printf("Usage: %s <argument>\n", argv[0]);
+        return EXIT_FAILURE;
+    }
 
     // Create a socket
     sockfd = socket(AF_BP, SOCK_DGRAM, 0);
@@ -31,7 +35,7 @@ int main() {
     // with plain sockaddr (maybe introduce a struct sockaddr_bp ??)
     struct sockaddr eid_addr;
     eid_addr.sa_family = AF_BP;
-    strncpy(eid_addr.sa_data, "ipn:2.1", sizeof(eid_addr.sa_data));
+    strncpy(eid_addr.sa_data, argv[1], sizeof(eid_addr.sa_data));
     eid_addr.sa_data[sizeof(eid_addr.sa_data) - 1] = '\0';
 
 
