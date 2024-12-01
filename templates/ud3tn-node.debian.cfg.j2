@@ -1,0 +1,51 @@
+#cloud-config
+package_reboot_if_required: false
+package_update: true
+package_upgrade: true
+packages:
+- openssh-server
+- curl
+- git
+- ca-certificates
+- make
+- build-essential
+- libsqlite3-dev
+- sqlite3
+- python3.11-venv
+ssh_pwauth: false
+users:
+- name: debian
+  sudo: ALL=(ALL) NOPASSWD:ALL
+  groups: users,admin
+  lock_passwd: false
+  ssh_authorized_keys:
+  - "{{ getenv("SSH_PUBLIC_KEY") }}"
+  shell: /bin/bash
+
+disable_root: true
+preserve_hostname: false
+hostname: ud3tn-node
+
+write_files:
+- path: /var/run/scripts/ud3tn.sh
+  content: |
+    #!/bin/bash
+    cd /home/debian
+    git clone --recursive https://gitlab.com/d3tn/ud3tn.git	
+    cd ud3tn
+    make posix -j8
+    make virtualenv
+    source .venv/bin/activate
+    make update-virtualenv
+  permissions: '0755'
+- path: /var/run/scripts/custom.sh
+  content: |
+    #!/bin/bash
+    curl -sS https://starship.rs/install.sh | sh -s -- -y
+    echo 'eval "$(starship init bash)"' >> /home/debian/.bashrc
+    curl --proto '=https' --tlsv1.2 -LsSf https://setup.atuin.sh
+  permissions: '0755'
+
+runcmd:
+- bash /var/run/scripts/ud3tn.sh
+- bash /var/run/scripts/custom.sh
