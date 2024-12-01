@@ -37,10 +37,10 @@ int main(int argc, char *argv[]) {
     eid_addr.sa_family = AF_BP;
     strncpy(eid_addr.sa_data, argv[1], sizeof(eid_addr.sa_data));
     eid_addr.sa_data[sizeof(eid_addr.sa_data) - 1] = '\0';
-
-
+    
     // Send a message
     const char *message = "Hello!";
+
     ret = sendto(sockfd, message, strlen(message) + 1, 0, &eid_addr, sizeof(eid_addr));
     if (ret < 0) {
         perror("sendto failed");

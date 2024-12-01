@@ -3,7 +3,7 @@
  * Copyright (C) 2017, Mark O'Neill <mark@markoneill.name>
  * All rights reserved.
  * https://owntrust.org
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
  * are met:
@@ -51,37 +51,39 @@
 
 #include "bp.h"
 
-#define HASHMAP_NUM_BUCKETS	100
+#define HASHMAP_NUM_BUCKETS 100
 
-typedef struct sock_ctx {
+typedef struct sock_ctx
+{
 	unsigned long id;
 	evutil_socket_t fd;
 	int has_bound; /* Nonzero if we've called bind locally */
 	struct sockaddr int_addr;
 	int int_addrlen;
-	union {
+	union
+	{
 		struct sockaddr ext_addr;
 		struct sockaddr rem_addr;
 	};
-	union {
+	union
+	{
 		int ext_addrlen;
 		int rem_addrlen;
 	};
 	int is_connected;
 	int is_accepting; /* acting as a TLS server or client? */
-	struct evconnlistener* listener;
+	struct evconnlistener *listener;
 	char rem_hostname[MAX_HOSTNAME];
-	tls_daemon_ctx_t* daemon;
+	tls_daemon_ctx_t *daemon;
 } sock_ctx_t;
 
-
-void free_sock_ctx(sock_ctx_t* sock_ctx);
+void free_sock_ctx(sock_ctx_t *sock_ctx);
 
 /* SSA direct functions */
 // static void accept_error_cb(struct evconnlistener *listener, void *ctx);
 // static void accept_cb(struct evconnlistener *listener, evutil_socket_t fd,
 // 	struct sockaddr *address, int socklen, void *ctx);
-static void signal_cb(evutil_socket_t fd, short event, void* arg);
+static void signal_cb(evutil_socket_t fd, short event, void *arg);
 static evutil_socket_t create_server_socket(ev_uint16_t port, int family, int protocol);
 
 /* SSA listener functions */
@@ -90,43 +92,47 @@ static evutil_socket_t create_server_socket(ev_uint16_t port, int family, int pr
 // 	struct sockaddr *address, int socklen, void *arg);
 
 /* special */
-ssize_t recv_fd_from(int fd, void *ptr, size_t nbytes, int *recvfd, struct sockaddr_un* addr, int addr_len);
+ssize_t recv_fd_from(int fd, void *ptr, size_t nbytes, int *recvfd, struct sockaddr_un *addr, int addr_len);
 
-int server_create(int port) {
+int server_create(int port)
+{
 	int ret;
-	//evutil_socket_t server_sock;
-	//struct evconnlistener* listener;
-	struct event* sev_pipe;
-	struct event* sev_int;
-	struct event* nl_ev;
-	struct nl_sock* netlink_sock;
-	struct event_base* ev_base = event_base_new();
+	// evutil_socket_t server_sock;
+	// struct evconnlistener* listener;
+	struct event *sev_pipe;
+	struct event *sev_int;
+	struct event *nl_ev;
+	struct nl_sock *netlink_sock;
+	struct event_base *ev_base = event_base_new();
 
 #ifndef NO_LOG
-        const char* ev_version = event_get_version();
+	const char *ev_version = event_get_version();
 #endif
-	if (ev_base == NULL) {
-                perror("event_base_new");
-                return 1;
-        }
+	if (ev_base == NULL)
+	{
+		perror("event_base_new");
+		return 1;
+	}
 
-       	log_printf(LOG_INFO, "Using libevent version %s with %s behind the scenes\n", ev_version, event_base_get_method(ev_base));
+	log_printf(LOG_INFO, "Using libevent version %s with %s behind the scenes\n", ev_version, event_base_get_method(ev_base));
 
 	/* Signal handler registration */
 	sev_pipe = evsignal_new(ev_base, SIGPIPE, signal_cb, NULL);
-	if (sev_pipe == NULL) {
+	if (sev_pipe == NULL)
+	{
 		log_printf(LOG_ERROR, "Couldn't create SIGPIPE handler event\n");
 		return 1;
 	}
 	sev_int = evsignal_new(ev_base, SIGINT, signal_cb, ev_base);
-	if (sev_int == NULL) {
+	if (sev_int == NULL)
+	{
 		log_printf(LOG_ERROR, "Couldn't create SIGINT handler event\n");
 		return 1;
 	}
 	evsignal_add(sev_pipe, NULL);
 	evsignal_add(sev_int, NULL);
 
-	//signal(SIGPIPE, SIG_IGN);
+	// signal(SIGPIPE, SIG_IGN);
 
 	tls_daemon_ctx_t daemon_ctx = {
 		.ev_base = ev_base,
@@ -137,7 +143,7 @@ int server_create(int port) {
 	};
 
 	/* Set up server socket with event base */
-	//server_sock =
+	// server_sock =
 	create_server_socket(port, PF_INET, SOCK_STREAM);
 	// listener = evconnlistener_new(ev_base, accept_cb, &daemon_ctx,
 	// 	LEV_OPT_CLOSE_ON_FREE | LEV_OPT_THREADSAFE, SOMAXCONN, server_sock);
@@ -149,17 +155,20 @@ int server_create(int port) {
 
 	/* Set up netlink socket with event base */
 	netlink_sock = netlink_connect(&daemon_ctx);
-	if (netlink_sock == NULL) {
+	if (netlink_sock == NULL)
+	{
 		log_printf(LOG_ERROR, "Couldn't create Netlink socket\n");
 		return 1;
 	}
 	ret = evutil_make_socket_nonblocking(nl_socket_get_fd(netlink_sock));
-	if (ret == -1) {
+	if (ret == -1)
+	{
 		log_printf(LOG_ERROR, "Failed in evutil_make_socket_nonblocking: %s\n",
-			 evutil_socket_error_to_string(EVUTIL_SOCKET_ERROR()));
+				   evutil_socket_error_to_string(EVUTIL_SOCKET_ERROR()));
 	}
 	nl_ev = event_new(ev_base, nl_socket_get_fd(netlink_sock), EV_READ | EV_PERSIST, netlink_recv, netlink_sock);
-	if (event_add(nl_ev, NULL) == -1) {
+	if (event_add(nl_ev, NULL) == -1)
+	{
 		log_printf(LOG_ERROR, "Couldn't add Netlink event\n");
 		return 1;
 	}
@@ -170,30 +179,30 @@ int server_create(int port) {
 		return 1;
 	}
 
-	/* Main event loop */	
+	/* Main event loop */
 	event_base_dispatch(ev_base);
 
 	log_printf(LOG_INFO, "Main event loop terminated\n");
 	netlink_disconnect(netlink_sock);
 
 	/* Cleanup */
-	//evconnlistener_free(listener); /* This also closes the socket due to our listener creation flags */
+	// evconnlistener_free(listener); /* This also closes the socket due to our listener creation flags */
 	hashmap_free(daemon_ctx.sock_map_port);
-	hashmap_deep_free(daemon_ctx.sock_map, (void (*)(void*))free_sock_ctx);
+	hashmap_deep_free(daemon_ctx.sock_map, (void (*)(void *))free_sock_ctx);
 	event_free(nl_ev);
 
 	event_free(sev_pipe);
 	event_free(sev_int);
-        event_base_free(ev_base);
-        /* This function hushes the wails of memory leak
-         * testing utilities, but was not introduced until
-         * libevent 2.1
-         */
-        #if LIBEVENT_VERSION_NUMBER >= 0x02010000
-        libevent_global_shutdown();
-        #endif
+	event_base_free(ev_base);
+/* This function hushes the wails of memory leak
+ * testing utilities, but was not introduced until
+ * libevent 2.1
+ */
+#if LIBEVENT_VERSION_NUMBER >= 0x02010000
+	libevent_global_shutdown();
+#endif
 
-        return 0;
+	return 0;
 }
 
 /* Creates a listening socket that binds to local IPv4 and IPv6 interfaces.
@@ -201,14 +210,15 @@ int server_create(int port) {
  * @param port numeric port for listening
  * @param type SOCK_STREAM or SOCK_DGRAM
  */
-evutil_socket_t create_server_socket(ev_uint16_t port, int family, int type) {
+evutil_socket_t create_server_socket(ev_uint16_t port, int family, int type)
+{
 	evutil_socket_t sock;
 	char port_buf[6];
 	int ret;
 
 	struct evutil_addrinfo hints;
-	struct evutil_addrinfo* addr_ptr;
-	struct evutil_addrinfo* addr_list;
+	struct evutil_addrinfo *addr_ptr;
+	struct evutil_addrinfo *addr_list;
 	struct sockaddr_un bind_addr = {
 		.sun_family = AF_UNIX,
 	};
@@ -220,32 +230,37 @@ evutil_socket_t create_server_socket(ev_uint16_t port, int family, int type) {
 	hints.ai_family = family;
 	hints.ai_socktype = type;
 
-	if (family == PF_UNIX) {
+	if (family == PF_UNIX)
+	{
 		sock = socket(AF_UNIX, type, 0);
-		if (sock == -1) {
+		if (sock == -1)
+		{
 			log_printf(LOG_ERROR, "socket: %s\n", strerror(errno));
 			exit(EXIT_FAILURE);
 		}
 
 		ret = evutil_make_listen_socket_reuseable(sock);
-		if (ret == -1) {
+		if (ret == -1)
+		{
 			log_printf(LOG_ERROR, "Failed in evutil_make_listen_socket_reuseable: %s\n",
-				 evutil_socket_error_to_string(EVUTIL_SOCKET_ERROR()));
+					   evutil_socket_error_to_string(EVUTIL_SOCKET_ERROR()));
 			EVUTIL_CLOSESOCKET(sock);
 			exit(EXIT_FAILURE);
 		}
 
 		ret = evutil_make_socket_nonblocking(sock);
-		if (ret == -1) {
+		if (ret == -1)
+		{
 			log_printf(LOG_ERROR, "Failed in evutil_make_socket_nonblocking: %s\n",
-				 evutil_socket_error_to_string(EVUTIL_SOCKET_ERROR()));
+					   evutil_socket_error_to_string(EVUTIL_SOCKET_ERROR()));
 			EVUTIL_CLOSESOCKET(sock);
 			exit(EXIT_FAILURE);
 		}
 
-		strcpy(bind_addr.sun_path+1, port_buf);
-		ret = bind(sock, (struct sockaddr*)&bind_addr, sizeof(sa_family_t) + 1 + strlen(port_buf));
-		if (ret == -1) {
+		strcpy(bind_addr.sun_path + 1, port_buf);
+		ret = bind(sock, (struct sockaddr *)&bind_addr, sizeof(sa_family_t) + 1 + strlen(port_buf));
+		if (ret == -1)
+		{
 			log_printf(LOG_ERROR, "bind: %s\n", strerror(errno));
 			EVUTIL_CLOSESOCKET(sock);
 			exit(EXIT_FAILURE);
@@ -270,36 +285,42 @@ evutil_socket_t create_server_socket(ev_uint16_t port, int family, int type) {
 	 *  See https://blog.powerdns.com/2012/10/08/on-binding-datagram-udp-sockets-to-the-any-addresses/
 	 */
 	ret = evutil_getaddrinfo(type == SOCK_DGRAM ? "::" : NULL, port_buf, &hints, &addr_list);
-	if (ret != 0) {
+	if (ret != 0)
+	{
 		log_printf(LOG_ERROR, "Failed in evutil_getaddrinfo: %s\n", evutil_gai_strerror(ret));
 		exit(EXIT_FAILURE);
 	}
-	
-	for (addr_ptr = addr_list; addr_ptr != NULL; addr_ptr = addr_ptr->ai_next) {
+
+	for (addr_ptr = addr_list; addr_ptr != NULL; addr_ptr = addr_ptr->ai_next)
+	{
 		sock = socket(addr_ptr->ai_family, addr_ptr->ai_socktype, addr_ptr->ai_protocol);
-		if (sock == -1) {
+		if (sock == -1)
+		{
 			log_printf(LOG_ERROR, "socket: %s\n", strerror(errno));
 			continue;
 		}
 
 		ret = evutil_make_listen_socket_reuseable(sock);
-		if (ret == -1) {
+		if (ret == -1)
+		{
 			log_printf(LOG_ERROR, "Failed in evutil_make_listen_socket_reuseable: %s\n",
-				 evutil_socket_error_to_string(EVUTIL_SOCKET_ERROR()));
+					   evutil_socket_error_to_string(EVUTIL_SOCKET_ERROR()));
 			EVUTIL_CLOSESOCKET(sock);
 			continue;
 		}
 
 		ret = evutil_make_socket_nonblocking(sock);
-		if (ret == -1) {
+		if (ret == -1)
+		{
 			log_printf(LOG_ERROR, "Failed in evutil_make_socket_nonblocking: %s\n",
-				 evutil_socket_error_to_string(EVUTIL_SOCKET_ERROR()));
+					   evutil_socket_error_to_string(EVUTIL_SOCKET_ERROR()));
 			EVUTIL_CLOSESOCKET(sock);
 			continue;
 		}
 
 		ret = bind(sock, addr_ptr->ai_addr, addr_ptr->ai_addrlen);
-		if (ret == -1) {
+		if (ret == -1)
+		{
 			log_printf(LOG_ERROR, "bind: %s\n", strerror(errno));
 			EVUTIL_CLOSESOCKET(sock);
 			continue;
@@ -307,7 +328,8 @@ evutil_socket_t create_server_socket(ev_uint16_t port, int family, int type) {
 		break;
 	}
 	evutil_freeaddrinfo(addr_list);
-	if (addr_ptr == NULL) {
+	if (addr_ptr == NULL)
+	{
 		log_printf(LOG_ERROR, "Failed to find a suitable address for binding\n");
 		exit(EXIT_FAILURE);
 	}
@@ -315,15 +337,15 @@ evutil_socket_t create_server_socket(ev_uint16_t port, int family, int type) {
 	return sock;
 }
 
-int	send_adu(char* value)
+int send_adu(char *value)
 {
-		Sdr	sdr;
-	char	*end;
-	char	*destEid;
-	char	*text;
-	int	length;
-	Object	bundlePayload;
-	Object	bundleZco;
+	Sdr sdr;
+	char *end;
+	char *destEid;
+	char *text;
+	int length;
+	Object bundlePayload;
+	Object bundleZco;
 
 	sdr = bp_get_sdr();
 	if (sdr == NULL)
@@ -342,6 +364,7 @@ int	send_adu(char* value)
 	destEid = value;
 	*end = 0;
 	text = end + 1;
+
 	length = strlen(text);
 	if (length == 0)
 	{
@@ -359,16 +382,16 @@ int	send_adu(char* value)
 	}
 
 	bundleZco = zco_create(sdr, ZcoSdrSource, bundlePayload, 0,
-			length, ZcoOutbound);
-	if (bundleZco == 0 || bundleZco == (Object) ERROR)
+						   length, ZcoOutbound);
+	if (bundleZco == 0 || bundleZco == (Object)ERROR)
 	{
 		sdr_end_xn(sdr);
 		putErrmsg("No text object.", NULL);
 		return 0;
 	}
 
-	if (bp_send(NULL, destEid, NULL, 86400, BP_STD_PRIORITY, 0,0,0, NULL,
-			bundleZco, NULL) <= 0)
+	if (bp_send(NULL, destEid, NULL, 86400, BP_STD_PRIORITY, 0, 0, 0, NULL,
+				bundleZco, NULL) <= 0)
 	{
 		sdr_end_xn(sdr);
 		putErrmsg("No text object.", NULL);
@@ -380,24 +403,24 @@ int	send_adu(char* value)
 	return 1;
 }
 
-void bundle_cb(tls_daemon_ctx_t* ctx, unsigned long id,
-		void* value, socklen_t len) {
-	//sock_ctx_t* sock_ctx;
-	//int response = 0; /* Default is success */
+void bundle_cb(tls_daemon_ctx_t *ctx, unsigned long id,
+			   void *value, socklen_t len)
+{
+	// sock_ctx_t* sock_ctx;
+	// int response = 0; /* Default is success */
 
-	//sock_ctx = (sock_ctx_t*)hashmap_get(ctx->sock_map, id);
-	//if (sock_ctx == NULL) {
-		//response = -EBADF;
-		//netlink_notify_kernel(ctx, id, response);
+	// sock_ctx = (sock_ctx_t*)hashmap_get(ctx->sock_map, id);
+	// if (sock_ctx == NULL) {
+	// response = -EBADF;
+	// netlink_notify_kernel(ctx, id, response);
 	//	return;
 	//}
 
 	send_adu(value);
 
-	//netlink_notify_kernel(ctx, id, response);
-	//return;
+	// netlink_notify_kernel(ctx, id, response);
+	// return;
 }
-
 
 // void accept_cb(struct evconnlistener *listener, evutil_socket_t fd,
 // 	struct sockaddr *address, int socklen, void *arg) {
@@ -519,18 +542,20 @@ void bundle_cb(tls_daemon_ctx_t* ctx, unsigned long id,
 // 	return;
 // }
 //
-void signal_cb(evutil_socket_t fd, short event, void* arg) {
+void signal_cb(evutil_socket_t fd, short event, void *arg)
+{
 	int signum = fd; /* why is this fd? */
-	switch (signum) {
-		case SIGPIPE:
-			log_printf(LOG_DEBUG, "Caught SIGPIPE and ignored it\n");
-			break;
-		case SIGINT:
-			log_printf(LOG_DEBUG, "Caught SIGINT\n");
-			event_base_loopbreak(arg);
-			break;
-		default:
-			break;
+	switch (signum)
+	{
+	case SIGPIPE:
+		log_printf(LOG_DEBUG, "Caught SIGPIPE and ignored it\n");
+		break;
+	case SIGINT:
+		log_printf(LOG_DEBUG, "Caught SIGINT\n");
+		event_base_loopbreak(arg);
+		break;
+	default:
+		break;
 	}
 	return;
 }
@@ -825,23 +850,27 @@ void signal_cb(evutil_socket_t fd, short event, void* arg) {
 //
 /* This function is provided to the hashmap implementation
  * so that it can correctly free all held data */
-void free_sock_ctx(sock_ctx_t* sock_ctx) {
-	if (sock_ctx->listener != NULL) {
+void free_sock_ctx(sock_ctx_t *sock_ctx)
+{
+	if (sock_ctx->listener != NULL)
+	{
 		evconnlistener_free(sock_ctx->listener);
 	}
-	else if (sock_ctx->is_connected == 1) {
+	else if (sock_ctx->is_connected == 1)
+	{
 		/* connections under the control of the tls_wrapper code
 		 * clean up themselves as a result of the close event
 		 * received from one of the endpoints. In this case we
 		 * only need to clean up the sock_ctx */
 	}
-	else {
+	else
+	{
 		EVUTIL_CLOSESOCKET(sock_ctx->fd);
 	}
-	//tls_opts_free(sock_ctx->tls_opts);
-	//if (sock_ctx->tls_conn != NULL) {
+	// tls_opts_free(sock_ctx->tls_opts);
+	// if (sock_ctx->tls_conn != NULL) {
 	//	free_tls_conn_ctx(sock_ctx->tls_conn);
-	//}
+	// }
 	free(sock_ctx);
 	return;
 }
