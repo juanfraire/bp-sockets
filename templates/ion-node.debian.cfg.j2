@@ -12,6 +12,7 @@ packages:
 - libnl-genl-3-dev 
 - libevent-dev
 - build-essential
+- python3-jinja2
 ssh_pwauth: false
 users:
 - name: debian
@@ -41,18 +42,18 @@ write_files:
   content: |
     #!/bin/bash
     cd /home/debian
-    git clone https://github.com/juanfraire/bp-sockets.git
+    git clone --branch feat/dev-env-guidance https://github.com/sylvain-pierrot/bp-sockets.git
   permissions: '0755'
-- path: /var/run/scripts/custom.sh
+- path: /var/run/scripts/just.sh
   content: |
     #!/bin/bash
-    curl -sS https://starship.rs/install.sh | sh -s -- -y
-    echo 'eval "$(starship init bash)"' >> /home/debian/.bashrc
-    curl --proto '=https' --tlsv1.2 -LsSf https://setup.atuin.sh
+    wget -qO - 'https://proget.makedeb.org/debian-feeds/prebuilt-mpr.pub' | gpg --dearmor | tee /usr/share/keyrings/prebuilt-mpr-archive-keyring.gpg 1> /dev/null
+    echo "deb [arch=all,$(dpkg --print-architecture) signed-by=/usr/share/keyrings/prebuilt-mpr-archive-keyring.gpg] https://proget.makedeb.org prebuilt-mpr $(lsb_release -cs)" | tee /etc/apt/sources.list.d/prebuilt-mpr.list
   permissions: '0755'
 
 runcmd:
-- apt-get -y install linux-headers-$(uname -r)
+- bash /var/run/scripts/just.sh
 - bash /var/run/scripts/ion.sh
 - bash /var/run/scripts/bp-sockets.sh
-- bash /var/run/scripts/custom.sh
+- apt-get update
+- apt-get -y install linux-headers-$(uname -r) just

@@ -38,14 +38,6 @@ write_files:
     source .venv/bin/activate
     make update-virtualenv
   permissions: '0755'
-- path: /var/run/scripts/custom.sh
-  content: |
-    #!/bin/bash
-    curl -sS https://starship.rs/install.sh | sh -s -- -y
-    echo 'eval "$(starship init bash)"' >> /home/debian/.bashrc
-    curl --proto '=https' --tlsv1.2 -LsSf https://setup.atuin.sh
-  permissions: '0755'
 
 runcmd:
 - bash /var/run/scripts/ud3tn.sh
-- bash /var/run/scripts/custom.sh
