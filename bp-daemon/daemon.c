@@ -382,7 +382,7 @@ int send_adu(char *value)
 	}
 
 	bundleZco = zco_create(sdr, ZcoSdrSource, bundlePayload, 0,
-						   length, ZcoOutbound);
+						   length + 1, ZcoOutbound);
 	if (bundleZco == 0 || bundleZco == (Object)ERROR)
 	{
 		sdr_end_xn(sdr);
