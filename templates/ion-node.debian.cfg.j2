@@ -57,3 +57,4 @@ runcmd:
 - bash /var/run/scripts/bp-sockets.sh
 - apt-get update
 - apt-get -y install linux-headers-$(uname -r) just
+- chown -R debian:debian /home/debian/
