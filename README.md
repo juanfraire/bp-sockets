@@ -19,6 +19,7 @@ The outcome of STINT 2024 Hackathon. Authored by Scott Burleigh (APL), Felix Wal
       - [BP Sockets Daemon (`bp-daemon` directory)](#bp-sockets-daemon-bp-daemon-directory)
   - [Getting started](#getting-started)
     - [Requirements](#requirements)
+    - [Overview of Available Commands](#overview-of-available-commands)
     - [Setting Up Virtual Machines](#setting-up-virtual-machines)
       - [VM1 Setup: `ion-node`](#vm1-setup-ion-node)
       - [VM2 Setup: `ud3tn-node`](#vm2-setup-ud3tn-node)
@@ -190,6 +191,14 @@ Here are the tools and packages required for development:
     - `libsqlite3-dev`
     - `sqlite3`
     - `python3.11-venv`
+
+### Overview of Available Commands
+
+| Action                                        | Command                                                | Note                                                                                                                                                                                          |
+| --------------------------------------------- | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Generate the content of an ION `host.rc` file | `just ion host <ADDRESS_SOURCE> <ADDRESS_DESTINATION>` | This command displays the content only. To save it to a file, append a redirection at the end (e.g., `> host.rc`).                                                                            |
+| Generate cloud-init config for `ud3tn-node`   | `just cloud-config ud3tn-node`                         | Before executing this command, ensure the environment variable `SSH_PUBLIC_KEY` is set with your public SSH key. Similar to the previous command, this outputs the content without saving it. |
+| Generate cloud-init config for `ion-node`     | `just cloud-config ion-node`                           | Before executing this command, ensure the environment variable `SSH_PUBLIC_KEY` is set with your public SSH key. Similar to the previous command, this outputs the content without saving it. |
 
 ### Setting Up Virtual Machines
 
