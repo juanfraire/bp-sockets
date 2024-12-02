@@ -12,11 +12,11 @@ NEW_INCLUDES = \
 	`pkg-config --cflags libnl-3.0` \
 	-Ilibevent/include
 LIBS = 	-lpthread \
-	-lm -lbp -lici \
+	-lbp -lici \
 	`pkg-config --libs \
 		libevent \
-		libnl-genl-3.0 \
-		`
+		libnl-genl-3.0` \
+	-lm
 LIBS_EX = \
 	-Llibevent/lib \
 	-Wl,-rpath \
