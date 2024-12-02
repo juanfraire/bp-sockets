@@ -310,7 +310,7 @@ build/posix/ud3tn \
 # --cla "tcpclv3:*,4556" -L 4
 ```
 
-5. [From `ud3tn-node`] Run the AAP2 Receiver in another terminal
+1. [From `ud3tn-node`] Run the AAP2 Receiver
 
 > ⚠️ IMPORTANT:
 > You need to open a new shell.
