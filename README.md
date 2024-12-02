@@ -194,11 +194,11 @@ Here are the tools and packages required for development:
 
 ### Overview of Available Commands
 
-| Action                                        | Command                                                | Note                                                                                                                                                                                          |
-| --------------------------------------------- | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Generate the content of an ION `host.rc` file | `just ion host <ADDRESS_SOURCE> <ADDRESS_DESTINATION>` | This command displays the content only. To save it to a file, append a redirection at the end (e.g., `> host.rc`).                                                                            |
-| Generate cloud-init config for `ud3tn-node`   | `just cloud-config ud3tn-node`                         | Before executing this command, ensure the environment variable `SSH_PUBLIC_KEY` is set with your public SSH key. Similar to the previous command, this outputs the content without saving it. |
-| Generate cloud-init config for `ion-node`     | `just cloud-config ion-node`                           | Before executing this command, ensure the environment variable `SSH_PUBLIC_KEY` is set with your public SSH key. Similar to the previous command, this outputs the content without saving it. |
+| Action                                        | Command                                                | Note                                                                                                                                                                                            |
+| --------------------------------------------- | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Generate the content of an ION `host.rc` file | `just ion host <ADDRESS_SOURCE> <ADDRESS_DESTINATION>` | This command outputs the content to `stdout`. To save it to a file, append a redirection at the end (e.g., `> host.rc`).                                                                        |
+| Generate cloud-init config for `ud3tn-node`   | `just cloud-config ud3tn-node`                         | Before executing this command, ensure the environment variable `SSH_PUBLIC_KEY` is set with your public SSH key. Similar to the previous command, this command outputs the content to `stdout`. |
+| Generate cloud-init config for `ion-node`     | `just cloud-config ion-node`                           | Before executing this command, ensure the environment variable `SSH_PUBLIC_KEY` is set with your public SSH key. Similar to the previous command, this command outputs the content to `stdout`. |
 
 ### Setting Up Virtual Machines
 
@@ -212,7 +212,7 @@ SSH_PUBLIC_KEY="ssh-rsa AAA..." just cloud-config ion-node > ion-node.debian.cfg
 virt-install --name ion-node \
 	--vcpus 4 --ram 2048 \
 	--disk size=10,backing_store=/path/to/debian-12-generic-amd64.qcow2 \
-    --cloud-init user-data=./ion-node.debian.cfg,disable=on \
+  --cloud-init user-data=./ion-node.debian.cfg,disable=on \
 	--network bridge=virbr0 \
 	--osinfo debian12
 ```
@@ -245,7 +245,7 @@ ionstart -I host.rc
 # Set up bp-sockets kernel module
 cd bp-sock
 make
-sudo insmod bp.ko
+insmod bp.ko
 
 # Set up bp-daemon
 cd ../bp-daemon
@@ -254,6 +254,9 @@ make
 ```
 
 5. [From `ion-node`] Build and run user-space demo application
+
+> ⚠️ IMPORTANT:
+> You need to open a new shell and wait for setting up µD3TN (VM2 Setup).
 
 ```bash
 cd /home/debian/bp-sockets
@@ -273,7 +276,7 @@ SSH_PUBLIC_KEY="ssh-rsa AAA..." just cloud-config ud3tn-node > ud3tn-node.debian
 virt-install --name ud3tn-node \
 	--vcpus 4 --ram 2048 \
 	--disk size=10,backing_store=/path/to/debian-12-generic-amd64.qcow2 \
-    --cloud-init user-data=./ud3tn-node.debian.cfg,disable=on \
+  --cloud-init user-data=./ud3tn-node.debian.cfg,disable=on \
 	--network bridge=virbr0 \
 	--osinfo debian12
 ```
@@ -290,7 +293,7 @@ ssh debian@<ADDRESS>
 sudo -i
 ```
 
-4. [From `ud3tn-node`] Start the uD3TN
+4. [From `ud3tn-node`] Start µD3TN
 
 ```bash
 cd /home/debian/ud3tn
@@ -308,6 +311,9 @@ build/posix/ud3tn \
 ```
 
 5. [From `ud3tn-node`] Run the AAP2 Receiver in another terminal
+
+> ⚠️ IMPORTANT:
+> You need to open a new shell.
 
 ```bash
 cd /home/debian/ud3tn
