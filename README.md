@@ -160,7 +160,7 @@ To deploy the B daemon, use the following commands:
 
 ## Getting started
 
-To set up the development environment outlined in the [Architecture](#architecture) section, prepare two virtual machines (VM1 and VM2). First, download the following image: [debian-12-generic-amd64.qcow2](https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-generic-amd64.qcow2).
+To set up the development environment outlined in the [Architecture](#architecture) section, we are going to prepare two virtual machines (VM1 and VM2). First, download the following image: [debian-12-generic-amd64.qcow2](https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-generic-amd64.qcow2); Next, skip ahead to the [Setting Up Virtual Machines](#setting-up-virtual-machines) section to follow the instructions.
 
 > ⚠️ IMPORTANT:
 > It is highly recommended to use `ion-node` (VM1) as your development environment. This VM already includes the necessary tools and dependencies like `just`, `make`, and `python3-jinja2`. By working directly on VM1, you can simplify testing and avoid additional setup on your local machine.
