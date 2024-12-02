@@ -9,7 +9,6 @@
 
 #define CUSTOM_PROTO_FAMILY 28
 
-
 static int testcustom(struct sock *sk)
 {
     pr_info("in the .init");
@@ -22,26 +21,25 @@ static int testcustom(struct sock *sk)
 static struct proto_ops custom_proto_ops;
 
 static struct proto custom_proto = {
-    .name       = "custom_proto",      // Name of your protocol
-    .owner      = THIS_MODULE,         // Owner module (if any)
-    .obj_size   = sizeof(struct sock), // Size of the protocol's socket structure
-    .init       = testcustom   // Initialization function for the protocol
+    .name = "custom_proto",          // Name of your protocol
+    .owner = THIS_MODULE,            // Owner module (if any)
+    .obj_size = sizeof(struct sock), // Size of the protocol's socket structure
+    .init = testcustom               // Initialization function for the protocol
 };
-
-
 
 static int custom_create(struct net *net, struct socket *sock, int protocol, int kern)
 {
-   pr_info("custom_create: entering function\n");
+    pr_info("custom_create: entering function\n");
 
-    struct sock * sk;
+    struct sock *sk;
 
     int rc;
 
     sock->ops = &custom_proto_ops;
     sk = sk_alloc(net, CUSTOM_PROTO_FAMILY, GFP_KERNEL, &custom_proto, 1);
     pr_info("sk allocated\n");
-    if (!sk) {
+    if (!sk)
+    {
         printk("error  at sk check ");
         return -ENOMEM;
     }
@@ -49,7 +47,6 @@ static int custom_create(struct net *net, struct socket *sock, int protocol, int
     sock_init_data(sock, sk);
     pr_info("sock initiated\n");
     sk->sk_protocol = protocol;
-
 
     pr_info("custom_create: exiting function\n");
     return 0;
@@ -99,8 +96,6 @@ static int custom_release(struct socket *sock)
 
 static int custom_sendmsg(struct socket *sock, struct msghdr *msg, size_t size)
 {
-
-
     ssize_t written;
     void *data;
 
@@ -109,12 +104,13 @@ static int custom_sendmsg(struct socket *sock, struct msghdr *msg, size_t size)
 
     addr = (struct sockaddr *)msg->msg_name;
     addr_len = strlen(addr->sa_data);
-    total_size = size +  addr_len + 1;
+    total_size = size + addr_len + 1;
     pr_info("custom_sendmsg: entering function 2.0\n");
 
     data = kmalloc(total_size, GFP_KERNEL);
 
-    if (!data) {
+    if (!data)
+    {
         pr_err("custom_sendmsg: failed to allocate memory\n");
         return -ENOMEM;
     }
@@ -122,12 +118,13 @@ static int custom_sendmsg(struct socket *sock, struct msghdr *msg, size_t size)
     // kernel guys would not necessarily like this..
     // manually concat addr and msg separated with backslash with memcpy and pointer arithmetic..
     memcpy(data, addr->sa_data, addr_len);
-    char *char_addr = (char *) data;
+    char *char_addr = (char *)data;
     char_addr += addr_len;
-    *char_addr ='\\';
-    char_addr ++;
-    
-    if (copy_from_iter((void*) char_addr, size, &msg->msg_iter) != size ) {
+    *char_addr = '\\';
+    char_addr++;
+
+    if (copy_from_iter((void *)char_addr, size, &msg->msg_iter) != size)
+    {
         pr_err("custom_sendmsg: failed to copy data from user\n");
         kfree(data);
         return -EFAULT;
@@ -135,20 +132,18 @@ static int custom_sendmsg(struct socket *sock, struct msghdr *msg, size_t size)
 
     // Get the sockaddr from the msghdr
 
-    printk(KERN_INFO "addr & addrlen= %s %d",  addr->sa_data, addr_len);
+    printk(KERN_INFO "addr & addrlen= %s %d", addr->sa_data, addr_len);
     printk(KERN_INFO "msg size : %zu \n", size);
     printk(KERN_INFO "total size : %zu %s \n", total_size, data);
 
-    unsigned long id = (unsigned long) sock->sk->sk_socket;
+    unsigned long id = (unsigned long)sock->sk->sk_socket;
     send_bundle_notification(id, data, total_size, 8443);
-
 
     kfree(data);
     pr_info("custom_sendmsg: exiting function 2.0\n");
 
     return 0;
 }
-
 
 static int custom_recvmsg(struct socket *sock, struct msghdr *msg, size_t size, int flags)
 {
@@ -158,14 +153,14 @@ static int custom_recvmsg(struct socket *sock, struct msghdr *msg, size_t size, 
 static const struct net_proto_family custom_family_ops = {
     .family = CUSTOM_PROTO_FAMILY,
     .create = custom_create,
-    .owner  = THIS_MODULE,
+    .owner = THIS_MODULE,
 };
 
 static struct proto_ops custom_proto_ops = {
-    .family     = CUSTOM_PROTO_FAMILY,
-    .owner      = THIS_MODULE,
-    .release    = custom_release,
-    .bind =  sock_no_bind,
+    .family = CUSTOM_PROTO_FAMILY,
+    .owner = THIS_MODULE,
+    .release = custom_release,
+    .bind = sock_no_bind,
     .connect = sock_no_connect,
     .socketpair = sock_no_socketpair,
     .accept = sock_no_accept,
@@ -180,8 +175,7 @@ static struct proto_ops custom_proto_ops = {
     .mmap = sock_no_mmap,
     .getsockopt = sock_common_getsockopt,
     .recvmsg = sock_common_recvmsg,
-    .setsockopt = sock_common_setsockopt
-};
+    .setsockopt = sock_common_setsockopt};
 
 static int __init custom_proto_init(void)
 {
@@ -190,13 +184,15 @@ static int __init custom_proto_init(void)
     pr_info("custom_proto_init: initializing module\n");
     register_netlink();
     rc = proto_register(&custom_proto, 0);
-    if (rc) {
+    if (rc)
+    {
         pr_err("custom_proto_init: failed to register proto\n");
         return rc;
     }
 
     rc = sock_register(&custom_family_ops);
-    if (rc) {
+    if (rc)
+    {
         pr_err("custom_proto_init: failed to register socket family\n");
         proto_unregister(&custom_proto);
         return rc;
@@ -221,5 +217,3 @@ module_exit(custom_proto_exit);
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Your Name");
 MODULE_DESCRIPTION("Custom socket protocol module");
-
-
