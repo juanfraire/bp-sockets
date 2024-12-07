@@ -19,7 +19,7 @@ const struct net_proto_family bp_net_proto = {
     .owner = THIS_MODULE,
 };
 
-static struct proto_ops bp_proto_ops = {
+struct proto_ops bp_proto_ops = {
     .family = AF_BP,
     .owner = THIS_MODULE,
     .release = bp_release,
@@ -39,7 +39,7 @@ static struct proto_ops bp_proto_ops = {
     .sendmsg = bp_sendmsg,
     .recvmsg = bp_recvmsg};
 
-static int bp_init_sock(struct sock *sk)
+int bp_init_sock(struct sock *sk)
 {
     pr_info("in the .init");
     // Initialization logic specific to your protocol
@@ -48,7 +48,7 @@ static int bp_init_sock(struct sock *sk)
     return 0; // Return 0 for success, or an error code
 }
 
-static int bp_create_socket(struct net *net, struct socket *sock, int protocol, int kern)
+int bp_create_socket(struct net *net, struct socket *sock, int protocol, int kern)
 {
     struct sock *sk;
     // int rc;
@@ -69,7 +69,7 @@ static int bp_create_socket(struct net *net, struct socket *sock, int protocol, 
     return 0;
 }
 
-static int bp_release(struct socket *sock)
+int bp_release(struct socket *sock)
 {
     struct sock *sk = sock->sk;
     sock_put(sk);
@@ -77,7 +77,7 @@ static int bp_release(struct socket *sock)
 
     return 0;
 }
-/*static int custom_sendmsg(struct socket *sock, struct msghdr *msg, size_t size)
+/* int custom_sendmsg(struct socket *sock, struct msghdr *msg, size_t size)
 {
 
 
@@ -111,7 +111,7 @@ static int bp_release(struct socket *sock)
 }
 */
 
-static int bp_sendmsg(struct socket *sock, struct msghdr *msg, size_t size)
+int bp_sendmsg(struct socket *sock, struct msghdr *msg, size_t size)
 {
     // ssize_t written;
     void *data;
@@ -162,7 +162,7 @@ static int bp_sendmsg(struct socket *sock, struct msghdr *msg, size_t size)
     return 0;
 }
 
-static int bp_recvmsg(struct socket *sock, struct msghdr *msg, size_t size, int flags)
+int bp_recvmsg(struct socket *sock, struct msghdr *msg, size_t size, int flags)
 {
     return -EOPNOTSUPP;
 }
