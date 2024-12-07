@@ -8,9 +8,6 @@
 #include "netlink.h"
 #include "proto_sock.h"
 
-extern struct proto bp_proto;
-extern const struct net_proto_family bp_net_proto;
-
 static int __init bp_init(void)
 {
     int rc;
