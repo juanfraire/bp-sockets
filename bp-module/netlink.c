@@ -1,6 +1,5 @@
 #include <net/netlink.h>
 #include <net/genetlink.h>
-
 #include "netlink.h"
 
 int nl_fail(struct sk_buff *skb, struct genl_info *info);
