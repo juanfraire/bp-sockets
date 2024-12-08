@@ -35,8 +35,7 @@
 
 #include "daemon.h"
 #include "log.h"
-
-void sig_handler(int signum);
+#include "main.h"
 
 pid_t *workers;
 int worker_count;
@@ -101,7 +100,7 @@ int main(int argc, char *argv[])
 		}
 		if (pid == 0)
 		{
-			server_create(starting_port + i);
+			mainloop(starting_port + i);
 			free(workers);
 			return 0;
 		}

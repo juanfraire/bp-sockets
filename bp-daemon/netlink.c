@@ -97,8 +97,6 @@ static struct nla_policy ssa_nl_policy[SSA_NL_A_MAX + 1] = {
 	//[SSA_NL_A_RETURN] = { .type = NLA_UNSPEC },
 };
 
-int handle_netlink_msg(struct nl_msg *msg, void *arg);
-
 struct nl_sock *netlink_connect(tls_daemon_ctx_t *ctx)
 {
 	int group;

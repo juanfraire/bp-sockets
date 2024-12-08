@@ -34,6 +34,7 @@
 
 #include "daemon.h"
 
+int handle_netlink_msg(struct nl_msg *msg, void *arg);
 int netlink_disconnect(struct nl_sock *sock);
 void netlink_recv(evutil_socket_t fd, short events, void *arg);
 void netlink_notify_kernel(tls_daemon_ctx_t *ctx, unsigned long id, int response);

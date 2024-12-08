@@ -36,106 +36,43 @@
 #include <sys/un.h>
 #include <netdb.h>
 #include <assert.h>
-
 #include <event2/event.h>
 #include <event2/listener.h>
 #include <event2/util.h>
-
 #include <netlink/genl/genl.h>
 #include <netlink/genl/ctrl.h>
-
 #include "daemon.h"
 #include "hashmap.h"
 #include "netlink.h"
 #include "log.h"
-
 #include "bp.h"
 
 #define HASHMAP_NUM_BUCKETS 100
 
-typedef struct sock_ctx
-{
-	unsigned long id;
-	evutil_socket_t fd;
-	int has_bound; /* Nonzero if we've called bind locally */
-	struct sockaddr int_addr;
-	int int_addrlen;
-	union
-	{
-		struct sockaddr ext_addr;
-		struct sockaddr rem_addr;
-	};
-	union
-	{
-		int ext_addrlen;
-		int rem_addrlen;
-	};
-	int is_connected;
-	int is_accepting; /* acting as a TLS server or client? */
-	struct evconnlistener *listener;
-	char rem_hostname[MAX_HOSTNAME];
-	tls_daemon_ctx_t *daemon;
-} sock_ctx_t;
-
-void free_sock_ctx(sock_ctx_t *sock_ctx);
-
-/* SSA direct functions */
-// static void accept_error_cb(struct evconnlistener *listener, void *ctx);
-// static void accept_cb(struct evconnlistener *listener, evutil_socket_t fd,
-// 	struct sockaddr *address, int socklen, void *ctx);
-static void signal_cb(evutil_socket_t fd, short event, void *arg);
-static evutil_socket_t create_server_socket(ev_uint16_t port, int family, int protocol);
-
-/* SSA listener functions */
-// static void listener_accept_error_cb(struct evconnlistener *listener, void *ctx);
-// static void listener_accept_cb(struct evconnlistener *listener, evutil_socket_t fd,
-// 	struct sockaddr *address, int socklen, void *arg);
-
-/* special */
-ssize_t recv_fd_from(int fd, void *ptr, size_t nbytes, int *recvfd, struct sockaddr_un *addr, int addr_len);
-
-int server_create(int port)
+int mainloop(int port)
 {
 	int ret;
 	// evutil_socket_t server_sock;
 	// struct evconnlistener* listener;
-	struct event *sev_pipe;
-	struct event *sev_int;
-	struct event *nl_ev;
+	struct event_base *base;
+	struct event *event_on_sigpipe, *event_on_sigint, *event_on_nl;
 	struct nl_sock *netlink_sock;
-	struct event_base *ev_base = event_base_new();
-
 #ifndef NO_LOG
 	const char *ev_version = event_get_version();
 #endif
-	if (ev_base == NULL)
-	{
-		perror("event_base_new");
-		return 1;
-	}
 
-	log_printf(LOG_INFO, "Using libevent version %s with %s behind the scenes\n", ev_version, event_base_get_method(ev_base));
+	base = event_base_new();
+	log_printf(LOG_INFO, "Using libevent version %s with %s behind the scenes\n", ev_version, event_base_get_method(base));
 
 	/* Signal handler registration */
-	sev_pipe = evsignal_new(ev_base, SIGPIPE, signal_cb, NULL);
-	if (sev_pipe == NULL)
-	{
-		log_printf(LOG_ERROR, "Couldn't create SIGPIPE handler event\n");
-		return 1;
-	}
-	sev_int = evsignal_new(ev_base, SIGINT, signal_cb, ev_base);
-	if (sev_int == NULL)
-	{
-		log_printf(LOG_ERROR, "Couldn't create SIGINT handler event\n");
-		return 1;
-	}
-	evsignal_add(sev_pipe, NULL);
-	evsignal_add(sev_int, NULL);
+	event_on_sigpipe = evsignal_new(base, SIGPIPE, signal_cb, NULL);
+	event_on_sigint = evsignal_new(base, SIGINT, signal_cb, base);
 
-	// signal(SIGPIPE, SIG_IGN);
+	evsignal_add(event_on_sigpipe, NULL);
+	evsignal_add(event_on_sigint, NULL);
 
 	tls_daemon_ctx_t daemon_ctx = {
-		.ev_base = ev_base,
+		.base = base,
 		.netlink_sock = NULL,
 		.port = port,
 		.sock_map = hashmap_create(HASHMAP_NUM_BUCKETS),
@@ -145,7 +82,7 @@ int server_create(int port)
 	/* Set up server socket with event base */
 	// server_sock =
 	create_server_socket(port, PF_INET, SOCK_STREAM);
-	// listener = evconnlistener_new(ev_base, accept_cb, &daemon_ctx,
+	// listener = evconnlistener_new(base, accept_cb, &daemon_ctx,
 	// 	LEV_OPT_CLOSE_ON_FREE | LEV_OPT_THREADSAFE, SOMAXCONN, server_sock);
 	// if (listener == NULL) {
 	// 	log_printf(LOG_ERROR, "Couldn't create evconnlistener\n");
@@ -166,8 +103,8 @@ int server_create(int port)
 		log_printf(LOG_ERROR, "Failed in evutil_make_socket_nonblocking: %s\n",
 				   evutil_socket_error_to_string(EVUTIL_SOCKET_ERROR()));
 	}
-	nl_ev = event_new(ev_base, nl_socket_get_fd(netlink_sock), EV_READ | EV_PERSIST, netlink_recv, netlink_sock);
-	if (event_add(nl_ev, NULL) == -1)
+	event_on_nl = event_new(base, nl_socket_get_fd(netlink_sock), EV_READ | EV_PERSIST, netlink_recv, netlink_sock);
+	if (event_add(event_on_nl, NULL) == -1)
 	{
 		log_printf(LOG_ERROR, "Couldn't add Netlink event\n");
 		return 1;
@@ -180,8 +117,7 @@ int server_create(int port)
 	}
 
 	/* Main event loop */
-	event_base_dispatch(ev_base);
-
+	event_base_dispatch(base);
 	log_printf(LOG_INFO, "Main event loop terminated\n");
 	netlink_disconnect(netlink_sock);
 
@@ -189,11 +125,11 @@ int server_create(int port)
 	// evconnlistener_free(listener); /* This also closes the socket due to our listener creation flags */
 	hashmap_free(daemon_ctx.sock_map_port);
 	hashmap_deep_free(daemon_ctx.sock_map, (void (*)(void *))free_sock_ctx);
-	event_free(nl_ev);
+	event_free(event_on_nl);
 
-	event_free(sev_pipe);
-	event_free(sev_int);
-	event_base_free(ev_base);
+	event_free(event_on_sigpipe);
+	event_free(event_on_sigint);
+	event_base_free(base);
 /* This function hushes the wails of memory leak
  * testing utilities, but was not introduced until
  * libevent 2.1
@@ -764,7 +700,7 @@ void signal_cb(evutil_socket_t fd, short event, void *arg)
 //
 // 	//tls_opts_server_setup(sock_ctx->tls_opts);
 // 	sock_ctx->daemon = ctx; /* XXX I don't want this here */
-// 	sock_ctx->listener = evconnlistener_new(ctx->ev_base, listener_accept_cb, sock_ctx,
+// 	sock_ctx->listener = evconnlistener_new(ctx->base, listener_accept_cb, sock_ctx,
 // 		LEV_OPT_CLOSE_ON_FREE | LEV_OPT_THREADSAFE, 0, sock_ctx->fd);
 //
 // 	evconnlistener_set_error_cb(sock_ctx->listener, listener_accept_error_cb);
