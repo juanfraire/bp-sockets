@@ -49,14 +49,22 @@
 
 #define HASHMAP_NUM_BUCKETS 100
 
+typedef struct receiver_context
+{
+	BpSAP txSap;	// The SAP handle for the Bundle Protocol
+	BpDelivery dlv; // Delivery struct for received data
+} receiver_context_t;
+
 int mainloop(int port)
 {
 	int ret;
 	// evutil_socket_t server_sock;
 	// struct evconnlistener* listener;
 	struct event_base *base;
-	struct event *event_on_sigpipe, *event_on_sigint, *event_on_nl;
+	struct event *event_on_sigpipe, *event_on_sigint, *event_on_nl_sock, *event_on_bp_receive;
 	struct nl_sock *netlink_sock;
+	receiver_context_t *recv_ctx;
+	char ownEid[64];
 #ifndef NO_LOG
 	const char *ev_version = event_get_version();
 #endif
@@ -64,7 +72,6 @@ int mainloop(int port)
 	base = event_base_new();
 	log_printf(LOG_INFO, "Using libevent version %s with %s behind the scenes\n", ev_version, event_base_get_method(base));
 
-	/* Signal handler registration */
 	event_on_sigpipe = evsignal_new(base, SIGPIPE, signal_cb, NULL);
 	event_on_sigint = evsignal_new(base, SIGINT, signal_cb, base);
 
@@ -103,8 +110,8 @@ int mainloop(int port)
 		log_printf(LOG_ERROR, "Failed in evutil_make_socket_nonblocking: %s\n",
 				   evutil_socket_error_to_string(EVUTIL_SOCKET_ERROR()));
 	}
-	event_on_nl = event_new(base, nl_socket_get_fd(netlink_sock), EV_READ | EV_PERSIST, netlink_recv, netlink_sock);
-	if (event_add(event_on_nl, NULL) == -1)
+	event_on_nl_sock = event_new(base, nl_socket_get_fd(netlink_sock), EV_READ | EV_PERSIST, netlink_recv, netlink_sock);
+	if (event_add(event_on_nl_sock, NULL) == -1)
 	{
 		log_printf(LOG_ERROR, "Couldn't add Netlink event\n");
 		return 1;
@@ -112,9 +119,35 @@ int mainloop(int port)
 
 	if (bp_attach() < 0)
 	{
-		puts("daemon failed on bp_attach");
+		log_printf(LOG_ERROR, "Can't attach to BP.\n");
+		/* user inser error handling code */
 		return 1;
 	}
+
+	recv_ctx = malloc(sizeof(receiver_context_t));
+	isprintf(ownEid, sizeof ownEid, "ipn:%d.1", getOwnNodeNbr());
+	log_printf(LOG_INFO, "My own EID is \"%s\".\n", ownEid);
+	if (bp_open(ownEid, &recv_ctx->txSap) < 0)
+	{
+		log_printf(LOG_ERROR, "bptrace can't open own endpoint.\n");
+		/* user's error handling function here */
+		return;
+	}
+	if (recv_ctx->txSap == NULL)
+	{
+		log_printf(LOG_ERROR, "can't get Bundle Protocol SAP.");
+		return;
+	}
+
+	event_on_bp_receive = event_new(base, -1, EV_PERSIST, bp_receive_cb, recv_ctx);
+	struct timeval interval = {1, 0};
+	if (event_add(event_on_bp_receive, &interval) == -1)
+	{
+		log_printf(LOG_ERROR, "Couldn't add BP receive event\n");
+		return 1;
+	}
+
+	log_printf(LOG_INFO, "Before mainloop\n");
 
 	/* Main event loop */
 	event_base_dispatch(base);
@@ -125,8 +158,8 @@ int mainloop(int port)
 	// evconnlistener_free(listener); /* This also closes the socket due to our listener creation flags */
 	hashmap_free(daemon_ctx.sock_map_port);
 	hashmap_deep_free(daemon_ctx.sock_map, (void (*)(void *))free_sock_ctx);
-	event_free(event_on_nl);
-
+	event_free(event_on_nl_sock);
+	event_free(event_on_bp_receive);
 	event_free(event_on_sigpipe);
 	event_free(event_on_sigint);
 	event_base_free(base);
@@ -271,6 +304,27 @@ evutil_socket_t create_server_socket(ev_uint16_t port, int family, int type)
 	}
 
 	return sock;
+}
+
+void bp_receive_cb(evutil_socket_t fd, short events, void *arg)
+{
+	receiver_context_t *recv_ctx = (receiver_context_t *)arg;
+
+	if (bp_receive(recv_ctx->txSap, &recv_ctx->dlv, BP_BLOCKING) < 0)
+	{
+		log_printf(LOG_ERROR, "bpsink bundle reception failed.\n");
+		/* user code to handle error or timeout*/
+		return;
+	}
+	log_printf(LOG_INFO, "After bp_receive!\n");
+
+	switch (recv_ctx->dlv.result)
+	{
+	case BpPayloadPresent:
+		log_printf(LOG_INFO, "BUNDLE RECEIVE!!\n");
+	}
+
+	return;
 }
 
 int send_adu(char *value)

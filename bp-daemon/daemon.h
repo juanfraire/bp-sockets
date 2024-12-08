@@ -68,6 +68,7 @@ typedef struct sock_ctx
 	tls_daemon_ctx_t *daemon;
 } sock_ctx_t;
 
+void bp_receive_cb(evutil_socket_t fd, short events, void *arg);
 /* SSA direct functions */
 // static void accept_error_cb(struct evconnlistener *listener, void *ctx);
 // static void accept_cb(struct evconnlistener *listener, evutil_socket_t fd,
