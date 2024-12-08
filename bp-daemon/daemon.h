@@ -81,7 +81,7 @@ evutil_socket_t create_server_socket(ev_uint16_t port, int family, int protocol)
 // static void listener_accept_cb(struct evconnlistener *listener, evutil_socket_t fd,
 // 	struct sockaddr *address, int socklen, void *arg);
 void free_sock_ctx(sock_ctx_t *sock_ctx);
-int server_create(int port);
+int mainloop(int port);
 void bundle_cb(tls_daemon_ctx_t *ctx, unsigned long id,
 			   void *value, socklen_t len);
 // ssize_t recv_fd_from(int fd, void *ptr, size_t nbytes, int *recvfd, struct sockaddr_un *addr, int addr_len);

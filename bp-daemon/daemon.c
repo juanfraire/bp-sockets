@@ -131,12 +131,12 @@ int mainloop(int port)
 	{
 		log_printf(LOG_ERROR, "bptrace can't open own endpoint.\n");
 		/* user's error handling function here */
-		return;
+		return 1;
 	}
 	if (recv_ctx->txSap == NULL)
 	{
 		log_printf(LOG_ERROR, "can't get Bundle Protocol SAP.");
-		return;
+		return 1;
 	}
 
 	event_on_bp_receive = event_new(base, -1, EV_PERSIST, bp_receive_cb, recv_ctx);
@@ -163,6 +163,7 @@ int mainloop(int port)
 	event_free(event_on_sigpipe);
 	event_free(event_on_sigint);
 	event_base_free(base);
+	free(recv_ctx);
 /* This function hushes the wails of memory leak
  * testing utilities, but was not introduced until
  * libevent 2.1
@@ -309,6 +310,11 @@ evutil_socket_t create_server_socket(ev_uint16_t port, int family, int type)
 void bp_receive_cb(evutil_socket_t fd, short events, void *arg)
 {
 	receiver_context_t *recv_ctx = (receiver_context_t *)arg;
+	Sdr sdr = getIonsdr();
+	vast contentLength;
+	vast len;
+	char *content;
+	ZcoReader reader;
 
 	if (bp_receive(recv_ctx->txSap, &recv_ctx->dlv, BP_BLOCKING) < 0)
 	{
@@ -316,14 +322,38 @@ void bp_receive_cb(evutil_socket_t fd, short events, void *arg)
 		/* user code to handle error or timeout*/
 		return;
 	}
-	log_printf(LOG_INFO, "After bp_receive!\n");
 
 	switch (recv_ctx->dlv.result)
 	{
 	case BpPayloadPresent:
+		CHKVOID(sdr_begin_xn(sdr));
 		log_printf(LOG_INFO, "BUNDLE RECEIVE!!\n");
-	}
 
+		contentLength = zco_source_data_length(sdr, recv_ctx->dlv.adu);
+		content = malloc((size_t)contentLength);
+
+		zco_start_receiving(recv_ctx->dlv.adu, &reader);
+		len = zco_receive_source(sdr, &reader, contentLength, content);
+
+		if (sdr_end_xn(sdr) < 0 || len < 0)
+		{
+			sdr_exit_xn(sdr);
+			log_printf(LOG_ERROR, "Can't handle delivery. len = %d\n", len);
+			return;
+		}
+
+		log_printf(LOG_INFO, "PAYLOAD: %s\n", content);
+
+		// if (zco_receive_headers(sdr, &reader, contentLength, (char *)buffer) < 0)
+		// {
+		// 	sdr_cancel_xn(sdr);
+		// 	log_printf(LOG_ERROR, "can't receive ADU header.\n");
+		// 	MRELEASE(buffer);
+		// 	continue;
+		// }
+
+		bp_release_delivery(&recv_ctx->dlv, 0);
+	}
 	return;
 }
 
