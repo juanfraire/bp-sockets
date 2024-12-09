@@ -34,43 +34,13 @@
 #include "log.h"
 #include <linux/limits.h>
 
-// Attributes
-enum
-{
-	SSA_NL_A_UNSPEC,
-	SSA_NL_A_ID,
-	/*SSA_NL_A_BLOCKING,
-	SSA_NL_A_COMM,
-	SSA_NL_A_SOCKADDR_INTERNAL,
-	SSA_NL_A_SOCKADDR_EXTERNAL,
-	SSA_NL_A_SOCKADDR_REMOTE,
-	SSA_NL_A_OPTLEVEL,
-	SSA_NL_A_OPTNAME,
-	SSA_NL_A_OPTVAL,*/
-	SSA_NL_A_RETURN,
-	SSA_NL_A_OPTVAL,
-	// SSA_NL_A_PAD,
-	__SSA_NL_A_MAX,
-};
-
-#define SSA_NL_A_MAX (__SSA_NL_A_MAX - 1)
-
 // Operations
 enum
 {
 	SSA_NL_C_UNSPEC,
 	SSA_NL_C_BUNDLE_NOTIFY,
-	/*SSA_NL_C_SOCKET_NOTIFY,
-SSA_NL_C_SETSOCKOPT_NOTIFY,
-SSA_NL_C_GETSOCKOPT_NOTIFY,
-	SSA_NL_C_BIND_NOTIFY,
-	SSA_NL_C_CONNECT_NOTIFY,
-	SSA_NL_C_LISTEN_NOTIFY,
-SSA_NL_C_ACCEPT_NOTIFY,
-SSA_NL_C_CLOSE_NOTIFY,*/
 	SSA_NL_C_RETURN,
-	/*SSA_NL_C_DATA_RETURN,
-	SSA_NL_C_HANDSHAKE_RETURN,*/
+
 	__SSA_NL_C_MAX,
 };
 
@@ -82,19 +52,10 @@ enum ssa_nl_groups
 	SSA_NL_NOTIFY,
 };
 
-static struct nla_policy ssa_nl_policy[SSA_NL_A_MAX + 1] = {
+static const struct nla_policy ssa_nl_policy[SSA_NL_A_MAX + 1] = {
 	[SSA_NL_A_UNSPEC] = {.type = NLA_UNSPEC},
-	[SSA_NL_A_ID] = {.type = NLA_UNSPEC},
-	/*[SSA_NL_A_BLOCKING] = { .type = NLA_UNSPEC },
-	[SSA_NL_A_COMM] = { .type = NLA_UNSPEC },
-		[SSA_NL_A_SOCKADDR_INTERNAL] = { .type = NLA_UNSPEC },
-		[SSA_NL_A_SOCKADDR_EXTERNAL] = { .type = NLA_UNSPEC },
-	[SSA_NL_A_SOCKADDR_REMOTE] = { .type = NLA_UNSPEC },
-		[SSA_NL_A_OPTLEVEL] = { .type = NLA_UNSPEC },
-		[SSA_NL_A_OPTNAME] = { .type = NLA_UNSPEC },
-		*/
-	[SSA_NL_A_OPTVAL] = {.type = NLA_UNSPEC},
-	//[SSA_NL_A_RETURN] = { .type = NLA_UNSPEC },
+	[SSA_NL_A_ID] = {.type = NLA_U64},
+	[SSA_NL_A_OPTVAL] = {.type = NLA_STRING},
 };
 
 struct nl_sock *netlink_connect(tls_daemon_ctx_t *ctx)
@@ -328,42 +289,71 @@ void netlink_notify_kernel(tls_daemon_ctx_t *ctx, unsigned long id, int response
 	return;
 }
 
-// void netlink_send_and_notify_kernel(tls_daemon_ctx_t* ctx, unsigned long id, char* data, unsigned int len) {
-// 	int ret;
-// 	struct nl_msg* msg;
-// 	void* msg_head;
-// 	int msg_size = NLMSG_HDRLEN + GENL_HDRLEN +
-// 		nla_total_size(sizeof(id)) + nla_total_size(len);
-// 	msg = nlmsg_alloc_size(msg_size);
-// 	if (msg == NULL) {
-// 		log_printf(LOG_ERROR, "Failed to allocate message buffer\n");
-// 		return;
-// 	}
-// 	msg_head = genlmsg_put(msg, NL_AUTO_PID, NL_AUTO_SEQ, ctx->netlink_family, 0, 0, SSA_NL_C_DATA_RETURN, 1);
-// 	if (msg_head == NULL) {
-// 		log_printf(LOG_ERROR, "Failed in genlmsg_put\n");
-// 		return;
-// 	}
-// 	ret = nla_put_u64(msg, SSA_NL_A_ID, id);
-// 	if (ret != 0) {
-// 		log_printf(LOG_ERROR, "Failed to insert ID in netlink msg\n");
-// 		return;
-// 	}
-// 	ret = nla_put(msg, SSA_NL_A_OPTVAL, len, data);
-// 	if (ret != 0) {
-// 		log_printf(LOG_ERROR, "Failed to insert data response in netlink msg\n");
-// 		return;
-// 	}
-// 	ret = nl_send_auto(ctx->netlink_sock, msg);
-// 	if (ret < 0) {
-// 		log_printf(LOG_ERROR, "Failed to send netlink msg\n");
-// 		return;
-// 	}
-// 	//log_printf(LOG_INFO, "Sent data msg to kernel\n");
-// 	nlmsg_free(msg);
-// 	return;
-// }
-//
+void netlink_send_and_notify_kernel(tls_daemon_ctx_t *ctx, char *data, unsigned int len)
+{
+	int ret;
+	struct nl_msg *msg;
+	void *msg_head;
+	struct nlattr *attrs[SSA_NL_A_MAX + 1];
+
+	unsigned long id = nla_get_u64(attrs[SSA_NL_A_ID]);
+	log_printf(LOG_INFO, "MESSAGE: %s, LENGTH: %d", data, len);
+
+	// Calculate message size
+	int msg_size = NLMSG_HDRLEN + GENL_HDRLEN +
+				   nla_total_size(sizeof(id)) + nla_total_size(len);
+
+	// Allocate message
+	msg = nlmsg_alloc_size(msg_size);
+	if (msg == NULL)
+	{
+		log_printf(LOG_ERROR, "Failed to allocate Netlink message buffer.\n");
+		return;
+	}
+
+	// Construct the Generic Netlink message header
+	msg_head = genlmsg_put(msg, NL_AUTO_PID, NL_AUTO_SEQ, ctx->netlink_family, 0, 0, SSA_NL_C_RETURN, 1);
+	if (msg_head == NULL)
+	{
+		log_printf(LOG_ERROR, "Failed in genlmsg_put.\n");
+		nlmsg_free(msg);
+		return;
+	}
+
+	// Add the ID attribute
+	ret = nla_put_u64(msg, SSA_NL_A_ID, id);
+	if (ret != 0)
+	{
+		log_printf(LOG_ERROR, "Failed to add ID attribute to Netlink message.\n");
+		nlmsg_free(msg);
+		return;
+	}
+
+	// Add the data attribute
+	ret = nla_put(msg, SSA_NL_A_OPTVAL, len, data);
+	if (ret != 0)
+	{
+		log_printf(LOG_ERROR, "Failed to add data attribute to Netlink message.\n");
+		nlmsg_free(msg);
+		return;
+	}
+
+	// Send the message
+	ret = nl_send_auto(ctx->netlink_sock, msg);
+	if (ret < 0)
+	{
+		log_printf(LOG_ERROR, "Failed to send Netlink message (error %d).\n", ret);
+		nlmsg_free(msg);
+		return;
+	}
+
+	log_printf(LOG_INFO, "Successfully sent data message to kernel.\n");
+
+	// Free the message
+	nlmsg_free(msg);
+	return;
+}
+
 // void netlink_handshake_notify_kernel(tls_daemon_ctx_t* ctx, unsigned long id, int response) {
 // 	int ret;
 // 	struct nl_msg* msg;

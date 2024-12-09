@@ -310,10 +310,14 @@ build/posix/ud3tn \
 # --cla "tcpclv3:*,4556" -L 4
 ```
 
-1. [From `ud3tn-node`] Run the AAP2 Receiver
+5. [From `ud3tn-node`] Send and/or receive message
 
 > ⚠️ IMPORTANT:
 > You need to open a new shell.
+
+<details open>
+<summary>Run the AAP2 Receiver</summary>
+<br>
 
 ```bash
 cd /home/debian/ud3tn
@@ -321,6 +325,35 @@ cd /home/debian/ud3tn
 source .venv/bin/activate
 python3 tools/aap2/aap2_receive.py --agentid 1 --socket ./ud3tn.aap2.socket.2
 ```
+</details>
+
+<details close>
+<summary>Run the AAP2 Sender</summary>
+<br>
+
+```bash
+cd /home/debian/ud3tn
+
+source .venv/bin/activate
+
+# Add outgoing contact to ION node
+python3 tools/aap2/aap2_config.py --socket ./ud3tn.aap2.socket.2 --schedule 1 86400 100000 ipn:140.0 tcpclv3:<ADDRESS_DESTINATION>:4556
+# Example for '192.168.122.182': python3 tools/aap2/aap2_config.py \
+# --socket ./ud3tn.aap2.socket.2 \
+# --schedule 1 86400 100000 \
+# ipn:140.0 tcpclv3:192.168.122.182:4556
+
+# Send payload to ION node
+python3 tools/aap2/aap2_send.py --agentid 1 --socket ./ud3tn.aap2.socket.2 ipn:<HOST_ID_DESTINATION>.1 "Hello from ud3tn!" -v
+# Example for '192.168.122.182': python3 tools/aap2/aap2_send.py \
+# --agentid 1
+# --socket ./ud3tn.aap2.socket.2 \
+# ipn:140.1 "Hello from ud3tn!" -v
+```
+</details>
+
+
+
 
 ## Next Steps
 

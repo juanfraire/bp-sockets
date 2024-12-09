@@ -2,12 +2,10 @@
 #include <net/genetlink.h>
 #include "netlink.h"
 
-int nl_fail(struct sk_buff *skb, struct genl_info *info);
-
 static const struct nla_policy ssa_nl_policy[SSA_NL_A_MAX + 1] = {
 	[SSA_NL_A_UNSPEC] = {.type = NLA_UNSPEC},
-	[SSA_NL_A_ID] = {.type = NLA_UNSPEC},
-	[SSA_NL_A_OPTVAL] = {.type = NLA_UNSPEC},
+	[SSA_NL_A_ID] = {.type = NLA_U64},
+	[SSA_NL_A_OPTVAL] = {.type = NLA_STRING},
 
 };
 
@@ -17,6 +15,13 @@ static struct genl_ops ssa_nl_ops[] = {
 		.flags = GENL_ADMIN_PERM,
 		.policy = ssa_nl_policy,
 		.doit = nl_fail,
+		.dumpit = NULL,
+	},
+	{
+		.cmd = SSA_NL_C_RETURN,
+		.flags = GENL_ADMIN_PERM,
+		.policy = ssa_nl_policy,
+		.doit = nl_receive,
 		.dumpit = NULL,
 	},
 };
@@ -104,5 +109,45 @@ int send_bundle_notification(unsigned long id, void *optval, int optlen, int por
 	{
 		printk(KERN_ALERT "Failed in gemlmsg_unicast [setsockopt notify]\n (%d)", ret);
 	}
+	return 0;
+}
+
+int nl_receive(struct sk_buff *skb, struct genl_info *info)
+{
+	struct nlattr *na;
+	unsigned long id = 0;
+	void *optval = NULL;
+
+	printk(KERN_INFO "Trigger nl_receive\n");
+
+	if (!info)
+		return -EINVAL;
+
+	// Parse attributes from the Netlink message
+	na = info->attrs[SSA_NL_A_ID];
+	if (na)
+	{
+		id = *(unsigned long *)nla_data(na);
+		printk(KERN_INFO "Received ID: %lu\n", id);
+	}
+	else
+	{
+		printk(KERN_ALERT "Missing ID attribute.\n");
+		return -EINVAL;
+	}
+
+	na = info->attrs[SSA_NL_A_OPTVAL];
+	if (na)
+	{
+		optval = nla_data(na);
+		printk(KERN_INFO "Received Optval: %s\n", (char *)optval);
+	}
+	else
+	{
+		printk(KERN_ALERT "Missing Optval attribute.\n");
+		return -EINVAL;
+	}
+
+	// Perform further processing as needed...
 	return 0;
 }

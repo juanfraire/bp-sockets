@@ -1,4 +1,5 @@
 #include <linux/module.h>
+#include <linux/init.h>
 #include <linux/uaccess.h>
 #include <linux/kernel.h>
 #include <linux/net.h>
@@ -13,7 +14,9 @@ static int __init bp_init(void)
     int rc;
 
     pr_info("bp_init: initializing module\n");
+
     register_netlink();
+
     rc = proto_register(&bp_proto, 0);
     if (rc)
     {

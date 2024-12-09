@@ -10,7 +10,6 @@ enum
         SSA_NL_A_ID,
         SSA_NL_A_RETURN,
         SSA_NL_A_OPTVAL,
-
         __SSA_NL_A_MAX,
 };
 
@@ -34,8 +33,10 @@ enum ssa_nl_groups
         SSA_NL_NOTIFY,
 };
 
+int nl_fail(struct sk_buff *skb, struct genl_info *info);
 int register_netlink(void);
 int send_bundle_notification(unsigned long id, void *optval, int optlen, int port_id);
 void unregister_netlink(void);
+int nl_receive(struct sk_buff *skb, struct genl_info *info);
 
 #endif

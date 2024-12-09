@@ -53,6 +53,7 @@ typedef struct receiver_context
 {
 	BpSAP txSap;	// The SAP handle for the Bundle Protocol
 	BpDelivery dlv; // Delivery struct for received data
+	tls_daemon_ctx_t daemon_ctx;
 } receiver_context_t;
 
 int mainloop(int port)
@@ -125,6 +126,7 @@ int mainloop(int port)
 	}
 
 	recv_ctx = malloc(sizeof(receiver_context_t));
+	recv_ctx->daemon_ctx = daemon_ctx;
 	isprintf(ownEid, sizeof ownEid, "ipn:%d.1", getOwnNodeNbr());
 	log_printf(LOG_INFO, "My own EID is \"%s\".\n", ownEid);
 	if (bp_open(ownEid, &recv_ctx->txSap) < 0)
@@ -315,6 +317,11 @@ void bp_receive_cb(evutil_socket_t fd, short events, void *arg)
 	vast len;
 	char *content;
 	ZcoReader reader;
+	// netlink
+	struct nlmsghdr *nlh;
+	struct genlmsghdr *gnlh;
+	struct nlattr *attrs[SSA_NL_A_MAX + 1];
+	unsigned long id;
 
 	if (bp_receive(recv_ctx->txSap, &recv_ctx->dlv, BP_BLOCKING) < 0)
 	{
@@ -344,6 +351,7 @@ void bp_receive_cb(evutil_socket_t fd, short events, void *arg)
 
 		log_printf(LOG_INFO, "PAYLOAD: %s\n", content);
 
+		netlink_send_and_notify_kernel(&recv_ctx->daemon_ctx, content, len);
 		// if (zco_receive_headers(sdr, &reader, contentLength, (char *)buffer) < 0)
 		// {
 		// 	sdr_cancel_xn(sdr);

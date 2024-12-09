@@ -28,17 +28,26 @@
 #define NETLINK_H
 
 #include <event2/util.h>
-
 #include <netlink/genl/genl.h>
 #include <netlink/genl/ctrl.h>
-
 #include "daemon.h"
+
+enum
+{
+    SSA_NL_A_UNSPEC,
+    SSA_NL_A_ID,
+    SSA_NL_A_RETURN,
+    SSA_NL_A_OPTVAL,
+    __SSA_NL_A_MAX,
+};
+
+#define SSA_NL_A_MAX (__SSA_NL_A_MAX - 1)
 
 int handle_netlink_msg(struct nl_msg *msg, void *arg);
 int netlink_disconnect(struct nl_sock *sock);
 void netlink_recv(evutil_socket_t fd, short events, void *arg);
 void netlink_notify_kernel(tls_daemon_ctx_t *ctx, unsigned long id, int response);
-// void netlink_send_and_notify_kernel(tls_daemon_ctx_t* ctx, unsigned long id, char* data, unsigned int len);
+void netlink_send_and_notify_kernel(tls_daemon_ctx_t *ctx, char *data, unsigned int len);
 // void netlink_handshake_notify_kernel(tls_daemon_ctx_t* ctx, unsigned long id, int response);
 struct nl_sock *netlink_connect(tls_daemon_ctx_t *ctx);
 
