@@ -9,10 +9,10 @@
 enum genl_bp_attrs
 {
     GENL_BP_A_UNSPEC,
-    GENL_BP_A_ID,
-    GENL_BP_A_OPTVAL,
+    GENL_BP_A_SOCKID,
+    GENL_BP_A_EID,
+    GENL_BP_A_PAYLOAD,
     GENL_BP_A_RETURN,
-    GENL_BP_A_MSG,
     __GENL_BP_A_MAX,
 };
 
@@ -31,8 +31,9 @@ enum genl_bp_cmds
 
 static const struct nla_policy nla_policy[GENL_BP_A_MAX + 1] = {
     [GENL_BP_A_UNSPEC] = {.type = NLA_UNSPEC},
-    [GENL_BP_A_ID] = {.type = NLA_U64},
-    [GENL_BP_A_OPTVAL] = {.type = NLA_STRING},
+    [GENL_BP_A_SOCKID] = {.type = NLA_U64},
+    [GENL_BP_A_EID] = {.type = NLA_NUL_STRING},
+    [GENL_BP_A_PAYLOAD] = {.type = NLA_NUL_STRING},
 };
 
 #endif

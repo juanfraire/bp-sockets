@@ -43,54 +43,77 @@ int fail_doit(struct sk_buff *skb, struct genl_info *info)
 	return -1;
 }
 
-int send_bundle_doit(unsigned long id, void *optval, int optlen, int port_id)
+int send_bundle_doit(unsigned long sockid, char *payload, int payload_size, char *eid, int eid_size, int port_id)
 {
-	struct sk_buff *skb;
-	int ret;
-	void *msg_head;
-	int msg_size = nla_total_size(sizeof(unsigned long)) +
-				   2 * nla_total_size(sizeof(int)) +
-				   nla_total_size(optlen);
+	int ret = 0;
+	void *hdr;
+	struct sk_buff *msg;
+	int msg_size;
 
-	skb = genlmsg_new(msg_size, GFP_KERNEL);
-	printk(KERN_INFO "in netlink : %s", (char *)optval);
-	if (skb == NULL)
+	/* Allocate a new buffer for the reply */
+	msg_size = nla_total_size(sizeof(unsigned long)) +
+			   nla_total_size(payload_size);
+	msg = genlmsg_new(msg_size, GFP_KERNEL);
+	if (!msg)
 	{
-		printk(KERN_ALERT "Failed in genlmsg_new [setsockopt notify]\n");
-		return -1;
-	}
-	msg_head = genlmsg_put(skb, 0, 0, &genl_fam, 0, GENL_BP_CMD_BUNDLE_NOTIFY);
-	if (msg_head == NULL)
-	{
-		printk(KERN_ALERT "Failed in genlmsg_put [setsockopt notify]\n");
-		nlmsg_free(skb);
-		return -1;
-	}
-	ret = nla_put(skb, GENL_BP_A_ID, sizeof(id), &id);
-	if (ret != 0)
-	{
-		printk(KERN_ALERT "Failed in nla_put (id) [setsockopt notify]\n");
-		nlmsg_free(skb);
-		return -1;
+		pr_err("failed to allocate message buffer\n");
+		return -ENOMEM;
 	}
 
-	ret = nla_put(skb, GENL_BP_A_OPTVAL, optlen, optval);
-	if (ret != 0)
+	/* Put the Generic Netlink header */
+	hdr = genlmsg_put(msg, 0, 0, &genl_fam, 0, GENL_BP_CMD_BUNDLE_NOTIFY);
+	if (!hdr)
 	{
-		printk(KERN_ALERT "Failed in nla_put (optval) [setsockopt notify]\n");
-		nlmsg_free(skb);
-		return -1;
+		pr_err("failed to create genetlink header\n");
+		nlmsg_free(msg);
+		return -EMSGSIZE;
 	}
-	genlmsg_end(skb, msg_head);
-	/*ret = genlmsg_multicast(&genl_fam, skb, 0, SSA_NL_NOTIFY, GFP_KERNEL);
+
+	/* And the message */
+	if ((ret = nla_put(msg, GENL_BP_A_PAYLOAD, payload_size, payload)))
+	{
+		pr_err("failed to create message string\n");
+		genlmsg_cancel(msg, hdr);
+		nlmsg_free(msg);
+		goto out;
+	}
+	if ((ret = nla_put(msg, GENL_BP_A_EID, eid_size, eid)))
+	{
+		pr_err("failed to create message string\n");
+		genlmsg_cancel(msg, hdr);
+		nlmsg_free(msg);
+		goto out;
+	}
+	if ((ret = nla_put(msg, GENL_BP_A_SOCKID, sizeof(sockid), &sockid)))
+	{
+		pr_err("failed to create message string\n");
+		genlmsg_cancel(msg, hdr);
+		nlmsg_free(msg);
+		goto out;
+	}
+
+	// ret = nla_put(skb, SSA_NL_A_OPTVAL, optlen, optval);
+	// if (ret != 0)
+	// {
+	// 	printk(KERN_ALERT "Failed in nla_put (optval) [setsockopt notify]\n");
+	// 	nlmsg_free(skb);
+	// 	return -1;
+	// }
+
+	/* Finalize the message and send it */
+	genlmsg_end(msg, hdr);
+
+	/*ret = genlmsg_multicast(&ssa_nl_family, skb, 0, SSA_NL_NOTIFY, GFP_KERNEL);
 	if (ret != 0) {
 		printk(KERN_ALERT "Failed in gemlmsg_multicast [setsockopt notify] (%d)\n", ret);
 	}*/
-	ret = genlmsg_unicast(&init_net, skb, port_id);
+	ret = genlmsg_unicast(&init_net, msg, port_id);
 	if (ret != 0)
 	{
-		printk(KERN_ALERT "Failed in gemlmsg_unicast [setsockopt notify]\n (%d)", ret);
+		pr_alert("Failed in gemlmsg_unicast [setsockopt notify]\n (%d)", ret);
 	}
+
+out:
 	return 0;
 }
 
@@ -106,7 +129,7 @@ int recv_bundle_doit(struct sk_buff *skb, struct genl_info *info)
 		return -EINVAL;
 
 	// Parse attributes from the Netlink message
-	na = info->attrs[GENL_BP_A_ID];
+	na = info->attrs[GENL_BP_A_SOCKID];
 	if (na)
 	{
 		id = *(unsigned long *)nla_data(na);
@@ -118,7 +141,7 @@ int recv_bundle_doit(struct sk_buff *skb, struct genl_info *info)
 		return -EINVAL;
 	}
 
-	na = info->attrs[GENL_BP_A_OPTVAL];
+	na = info->attrs[GENL_BP_A_PAYLOAD];
 	if (na)
 	{
 		optval = nla_data(na);

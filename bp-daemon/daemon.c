@@ -357,13 +357,9 @@ void bp_receive_cb(evutil_socket_t fd, short events, void *arg)
 	return;
 }
 
-int send_adu(char *value)
+int send_adu(char *payload, int payload_size, char *eid, int eid_size)
 {
 	Sdr sdr;
-	char *end;
-	char *destEid;
-	char *text;
-	int length;
 	Object bundlePayload;
 	Object bundleZco;
 
@@ -373,27 +369,8 @@ int send_adu(char *value)
 		puts("*** Failed to get sdr.");
 		return 0;
 	}
-
-	end = strchr(value, '\\');
-	if (end == NULL)
-	{
-		putErrmsg("No EID.", NULL);
-		return 0;
-	}
-
-	destEid = value;
-	*end = 0;
-	text = end + 1;
-
-	length = strlen(text);
-	if (length == 0)
-	{
-		putErrmsg("Zero-length text.", NULL);
-		return 0;
-	}
-
 	oK(sdr_begin_xn(sdr));
-	bundlePayload = sdr_string_create(sdr, text);
+	bundlePayload = sdr_string_create(sdr, payload);
 	if (bundlePayload == 0)
 	{
 		sdr_end_xn(sdr);
@@ -402,7 +379,7 @@ int send_adu(char *value)
 	}
 
 	bundleZco = zco_create(sdr, ZcoSdrSource, bundlePayload, 0,
-						   length + 1, ZcoOutbound);
+						   payload_size, ZcoOutbound);
 	if (bundleZco == 0 || bundleZco == (Object)ERROR)
 	{
 		sdr_end_xn(sdr);
@@ -410,7 +387,7 @@ int send_adu(char *value)
 		return 0;
 	}
 
-	if (bp_send(NULL, destEid, NULL, 86400, BP_STD_PRIORITY, 0, 0, 0, NULL,
+	if (bp_send(NULL, eid, NULL, 86400, BP_STD_PRIORITY, 0, 0, 0, NULL,
 				bundleZco, NULL) <= 0)
 	{
 		sdr_end_xn(sdr);
@@ -423,8 +400,8 @@ int send_adu(char *value)
 	return 1;
 }
 
-void bundle_cb(tls_daemon_ctx_t *ctx, unsigned long id,
-			   void *value, socklen_t len)
+void bundle_cb(tls_daemon_ctx_t *ctx, unsigned long sockid,
+			   char *payload, int payload_size, char *eid, int eid_size)
 {
 	// sock_ctx_t* sock_ctx;
 	// int response = 0; /* Default is success */
@@ -435,8 +412,9 @@ void bundle_cb(tls_daemon_ctx_t *ctx, unsigned long id,
 	// netlink_notify_kernel(ctx, id, response);
 	//	return;
 	//}
-
-	send_adu(value);
+	log_printf(LOG_INFO, "[size=%zu] eid: %s\n", eid_size, eid);
+	log_printf(LOG_INFO, "[size=%zu] payload: %s\n", payload_size, payload);
+	send_adu(payload, payload_size, eid, eid_size);
 
 	// netlink_notify_kernel(ctx, id, response);
 	// return;

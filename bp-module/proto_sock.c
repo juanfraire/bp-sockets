@@ -77,23 +77,23 @@ int bp_release(struct socket *sock)
 
     return 0;
 }
-/* int custom_sendmsg(struct socket *sock, struct msghdr *msg, size_t size)
+/* int bp_sendmsg(struct socket *sock, struct msghdr *msg, size_t size)
 {
 
 
     ssize_t written;
     void *data;
 
-    pr_info("custom_sendmsg: entering function 2.0\n");
+    pr_info("bp_sendmsg: entering function 2.0\n");
 
     data = kmalloc(size, GFP_KERNEL);
     if (!data) {
-        pr_err("custom_sendmsg: failed to allocate memory\n");
+        pr_err("bp_sendmsg: failed to allocate memory\n");
         return -ENOMEM;
     }
 
     if (copy_from_iter(data, size, &msg->msg_iter) != size) {
-        pr_err("custom_sendmsg: failed to copy data from user\n");
+        pr_err("bp_sendmsg: failed to copy data from user\n");
         kfree(data);
         return -EFAULT;
     }
@@ -105,7 +105,7 @@ int bp_release(struct socket *sock)
 
 
     kfree(data);
-    pr_info("custom_sendmsg: exiting function 2.0\n");
+    pr_info("bp_sendmsg: exiting function 2.0\n");
 
     return -EOPNOTSUPP;
 }
@@ -113,51 +113,40 @@ int bp_release(struct socket *sock)
 
 int bp_sendmsg(struct socket *sock, struct msghdr *msg, size_t size)
 {
-    // ssize_t written;
-    void *data;
-
     struct sockaddr *addr;
-    int addr_len, total_size;
+    char *eid;
+    void *payload;
+    int eid_size;
+    unsigned long sockid;
 
     addr = (struct sockaddr *)msg->msg_name;
-    addr_len = strlen(addr->sa_data);
-    total_size = size + addr_len + 1;
-    pr_info("custom_sendmsg: entering function 2.0\n");
+    eid = addr->sa_data;
+    eid_size = strlen(addr->sa_data) + 1;
 
-    data = kmalloc(total_size, GFP_KERNEL);
+    pr_info("bp_sendmsg: entering function 2.0\n");
 
-    if (!data)
+    payload = kmalloc(size, GFP_KERNEL);
+    if (!payload)
     {
-        pr_err("custom_sendmsg: failed to allocate memory\n");
+        pr_err("bp_sendmsg: failed to allocate memory\n");
         return -ENOMEM;
     }
-
-    // kernel guys would not necessarily like this..
-    // manually concat addr and msg separated with backslash with memcpy and pointer arithmetic..
-    memcpy(data, addr->sa_data, addr_len);
-    char *char_addr = (char *)data;
-    char_addr += addr_len;
-    *char_addr = '\\';
-    char_addr++;
-
-    if (copy_from_iter((void *)char_addr, size, &msg->msg_iter) != size)
+    if (copy_from_iter((void *)payload, size, &msg->msg_iter) != size)
     {
-        pr_err("custom_sendmsg: failed to copy data from user\n");
-        kfree(data);
+        pr_err("bp_sendmsg: failed to copy data from user\n");
+        kfree(payload);
         return -EFAULT;
     }
 
     // Get the sockaddr from the msghdr
+    pr_info("[size=%zu] eid: %s\n", eid_size, eid);
+    pr_info("[size=%zu] payload: %s\n", size, (char *)payload);
 
-    printk(KERN_INFO "addr & addrlen= %s %d", addr->sa_data, addr_len);
-    printk(KERN_INFO "msg size : %zu \n", size);
-    printk(KERN_INFO "total size : %zu %s \n", (size_t)total_size, (char *)data);
+    sockid = (unsigned long)sock->sk->sk_socket;
+    send_bundle_doit(sockid, (char *)payload, size, eid, eid_size, 8443);
 
-    unsigned long id = (unsigned long)sock->sk->sk_socket;
-    send_bundle_doit(id, data, total_size, 8443);
-
-    kfree(data);
-    pr_info("custom_sendmsg: exiting function 2.0\n");
+    kfree(payload);
+    pr_info("bp_sendmsg: exiting function 2.0\n");
 
     return 0;
 }
