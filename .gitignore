@@ -54,3 +54,7 @@ dkms.conf
 # ION rc files and cloud-init files
 *.rc
 *.cfg
+
+bp-daemon/bp_daemon
+ion.log
+bp-user-app-with-sock
