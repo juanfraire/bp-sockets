@@ -1,67 +1,49 @@
-#include <net/netlink.h>
 #include <net/genetlink.h>
+#include "../genl_bp.h"
 #include "netlink.h"
 
-static const struct nla_policy ssa_nl_policy[SSA_NL_A_MAX + 1] = {
-	[SSA_NL_A_UNSPEC] = {.type = NLA_UNSPEC},
-	[SSA_NL_A_ID] = {.type = NLA_U64},
-	[SSA_NL_A_OPTVAL] = {.type = NLA_STRING},
-
-};
-
-static struct genl_ops ssa_nl_ops[] = {
+static struct genl_ops genl_ops[] = {
 	{
-		.cmd = SSA_NL_C_BUNDLE_NOTIFY,
+		.cmd = GENL_BP_CMD_BUNDLE_NOTIFY,
 		.flags = GENL_ADMIN_PERM,
-		.policy = ssa_nl_policy,
-		.doit = nl_fail,
+		.policy = nla_policy,
+		.doit = fail_doit,
 		.dumpit = NULL,
 	},
 	{
-		.cmd = SSA_NL_C_RETURN,
+		.cmd = GENL_BP_CMD_RETURN,
 		.flags = GENL_ADMIN_PERM,
-		.policy = ssa_nl_policy,
-		.doit = nl_receive,
+		.policy = nla_policy,
+		.doit = recv_bundle_doit,
 		.dumpit = NULL,
 	},
 };
 
-static const struct genl_multicast_group ssa_nl_grps[] = {
-	[SSA_NL_NOTIFY] = {
-		.name = "notify",
-	},
+/* Multicast groups for our family */
+static const struct genl_multicast_group genl_mcgrps[] = {
+	{.name = GENL_BP_MC_GRP_NAME},
 };
 
-static struct genl_family ssa_nl_family = {
+/* Generic Netlink family */
+struct genl_family genl_fam = {
 	.module = THIS_MODULE,
-	.ops = ssa_nl_ops,
-	.n_ops = ARRAY_SIZE(ssa_nl_ops),
-	.mcgrps = ssa_nl_grps,
-	.n_mcgrps = ARRAY_SIZE(ssa_nl_grps),
-	.hdrsize = 0,
-	.name = "SSA",
-	.version = 1,
-	.maxattr = SSA_NL_A_MAX,
+	.name = GENL_BP_NAME,
+	.version = GENL_BP_VERSION,
+	.maxattr = GENL_BP_A_MAX,
+	.ops = genl_ops,
+	.n_ops = ARRAY_SIZE(genl_ops),
+	.mcgrps = genl_mcgrps,
+	.n_mcgrps = ARRAY_SIZE(genl_mcgrps),
+	// .hdrsize = 0,
 };
 
-int nl_fail(struct sk_buff *skb, struct genl_info *info)
+int fail_doit(struct sk_buff *skb, struct genl_info *info)
 {
-	printk(KERN_ALERT "Kernel receieved an SSA netlink notification. This should never happen.\n");
+	pr_alert("Kernel receieved an SSA netlink notification. This should never happen.\n");
 	return -1;
 }
 
-int register_netlink()
-{
-	return genl_register_family(&ssa_nl_family);
-}
-
-void unregister_netlink()
-{
-	genl_unregister_family(&ssa_nl_family);
-	return;
-}
-
-int send_bundle_notification(unsigned long id, void *optval, int optlen, int port_id)
+int send_bundle_doit(unsigned long id, void *optval, int optlen, int port_id)
 {
 	struct sk_buff *skb;
 	int ret;
@@ -77,14 +59,14 @@ int send_bundle_notification(unsigned long id, void *optval, int optlen, int por
 		printk(KERN_ALERT "Failed in genlmsg_new [setsockopt notify]\n");
 		return -1;
 	}
-	msg_head = genlmsg_put(skb, 0, 0, &ssa_nl_family, 0, SSA_NL_C_BUNDLE_NOTIFY);
+	msg_head = genlmsg_put(skb, 0, 0, &genl_fam, 0, GENL_BP_CMD_BUNDLE_NOTIFY);
 	if (msg_head == NULL)
 	{
 		printk(KERN_ALERT "Failed in genlmsg_put [setsockopt notify]\n");
 		nlmsg_free(skb);
 		return -1;
 	}
-	ret = nla_put(skb, SSA_NL_A_ID, sizeof(id), &id);
+	ret = nla_put(skb, GENL_BP_A_ID, sizeof(id), &id);
 	if (ret != 0)
 	{
 		printk(KERN_ALERT "Failed in nla_put (id) [setsockopt notify]\n");
@@ -92,7 +74,7 @@ int send_bundle_notification(unsigned long id, void *optval, int optlen, int por
 		return -1;
 	}
 
-	ret = nla_put(skb, SSA_NL_A_OPTVAL, optlen, optval);
+	ret = nla_put(skb, GENL_BP_A_OPTVAL, optlen, optval);
 	if (ret != 0)
 	{
 		printk(KERN_ALERT "Failed in nla_put (optval) [setsockopt notify]\n");
@@ -100,7 +82,7 @@ int send_bundle_notification(unsigned long id, void *optval, int optlen, int por
 		return -1;
 	}
 	genlmsg_end(skb, msg_head);
-	/*ret = genlmsg_multicast(&ssa_nl_family, skb, 0, SSA_NL_NOTIFY, GFP_KERNEL);
+	/*ret = genlmsg_multicast(&genl_fam, skb, 0, SSA_NL_NOTIFY, GFP_KERNEL);
 	if (ret != 0) {
 		printk(KERN_ALERT "Failed in gemlmsg_multicast [setsockopt notify] (%d)\n", ret);
 	}*/
@@ -112,7 +94,7 @@ int send_bundle_notification(unsigned long id, void *optval, int optlen, int por
 	return 0;
 }
 
-int nl_receive(struct sk_buff *skb, struct genl_info *info)
+int recv_bundle_doit(struct sk_buff *skb, struct genl_info *info)
 {
 	struct nlattr *na;
 	unsigned long id = 0;
@@ -124,7 +106,7 @@ int nl_receive(struct sk_buff *skb, struct genl_info *info)
 		return -EINVAL;
 
 	// Parse attributes from the Netlink message
-	na = info->attrs[SSA_NL_A_ID];
+	na = info->attrs[GENL_BP_A_ID];
 	if (na)
 	{
 		id = *(unsigned long *)nla_data(na);
@@ -136,7 +118,7 @@ int nl_receive(struct sk_buff *skb, struct genl_info *info)
 		return -EINVAL;
 	}
 
-	na = info->attrs[SSA_NL_A_OPTVAL];
+	na = info->attrs[GENL_BP_A_OPTVAL];
 	if (na)
 	{
 		optval = nla_data(na);

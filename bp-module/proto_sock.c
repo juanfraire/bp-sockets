@@ -154,7 +154,7 @@ int bp_sendmsg(struct socket *sock, struct msghdr *msg, size_t size)
     printk(KERN_INFO "total size : %zu %s \n", (size_t)total_size, (char *)data);
 
     unsigned long id = (unsigned long)sock->sk->sk_socket;
-    send_bundle_notification(id, data, total_size, 8443);
+    send_bundle_doit(id, data, total_size, 8443);
 
     kfree(data);
     pr_info("custom_sendmsg: exiting function 2.0\n");

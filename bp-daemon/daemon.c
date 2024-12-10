@@ -46,6 +46,7 @@
 #include "netlink.h"
 #include "log.h"
 #include "bp.h"
+#include "../genl_bp.h"
 
 #define HASHMAP_NUM_BUCKETS 100
 
@@ -62,7 +63,7 @@ int mainloop(int port)
 	// evutil_socket_t server_sock;
 	// struct evconnlistener* listener;
 	struct event_base *base;
-	struct event *event_on_sigpipe, *event_on_sigint, *event_on_nl_sock, *event_on_bp_receive;
+	struct event *event_on_sigpipe, *event_on_sigint, *event_on_nl_sock;
 	struct nl_sock *netlink_sock;
 	receiver_context_t *recv_ctx;
 	char ownEid[64];
@@ -141,14 +142,6 @@ int mainloop(int port)
 		return 1;
 	}
 
-	event_on_bp_receive = event_new(base, -1, EV_PERSIST, bp_receive_cb, recv_ctx);
-	struct timeval interval = {1, 0};
-	if (event_add(event_on_bp_receive, &interval) == -1)
-	{
-		log_printf(LOG_ERROR, "Couldn't add BP receive event\n");
-		return 1;
-	}
-
 	log_printf(LOG_INFO, "Before mainloop\n");
 
 	/* Main event loop */
@@ -161,7 +154,6 @@ int mainloop(int port)
 	hashmap_free(daemon_ctx.sock_map_port);
 	hashmap_deep_free(daemon_ctx.sock_map, (void (*)(void *))free_sock_ctx);
 	event_free(event_on_nl_sock);
-	event_free(event_on_bp_receive);
 	event_free(event_on_sigpipe);
 	event_free(event_on_sigint);
 	event_base_free(base);
@@ -320,7 +312,7 @@ void bp_receive_cb(evutil_socket_t fd, short events, void *arg)
 	// netlink
 	struct nlmsghdr *nlh;
 	struct genlmsghdr *gnlh;
-	struct nlattr *attrs[SSA_NL_A_MAX + 1];
+	struct nlattr *attrs[GENL_BP_A_MAX + 1];
 	unsigned long id;
 
 	if (bp_receive(recv_ctx->txSap, &recv_ctx->dlv, BP_BLOCKING) < 0)

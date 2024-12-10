@@ -25,38 +25,14 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <linux/limits.h>
 #include <event2/util.h>
-
 #include <netlink/genl/genl.h>
 #include <netlink/genl/ctrl.h>
 #include "netlink.h"
 #include "daemon.h"
 #include "log.h"
-#include <linux/limits.h>
-
-// Operations
-enum
-{
-	SSA_NL_C_UNSPEC,
-	SSA_NL_C_BUNDLE_NOTIFY,
-	SSA_NL_C_RETURN,
-
-	__SSA_NL_C_MAX,
-};
-
-#define SSA_NL_C_MAX (__SSA_NL_C_MAX - 1)
-
-// Multicast group
-enum ssa_nl_groups
-{
-	SSA_NL_NOTIFY,
-};
-
-static const struct nla_policy ssa_nl_policy[SSA_NL_A_MAX + 1] = {
-	[SSA_NL_A_UNSPEC] = {.type = NLA_UNSPEC},
-	[SSA_NL_A_ID] = {.type = NLA_U64},
-	[SSA_NL_A_OPTVAL] = {.type = NLA_STRING},
-};
+#include "../genl_bp.h"
 
 struct nl_sock *netlink_connect(tls_daemon_ctx_t *ctx)
 {
@@ -79,14 +55,14 @@ struct nl_sock *netlink_connect(tls_daemon_ctx_t *ctx)
 		return NULL;
 	}
 
-	if ((family = genl_ctrl_resolve(netlink_sock, "SSA")) < 0)
+	if ((family = genl_ctrl_resolve(netlink_sock, GENL_BP_NAME)) < 0)
 	{
 		log_printf(LOG_ERROR, "Failed to resolve SSA family identifier\n");
 		return NULL;
 	}
 	ctx->netlink_family = family;
 
-	if ((group = genl_ctrl_resolve_grp(netlink_sock, "SSA", "notify")) < 0)
+	if ((group = genl_ctrl_resolve_grp(netlink_sock, GENL_BP_NAME, GENL_BP_MC_GRP_NAME)) < 0)
 	{
 		log_printf(LOG_ERROR, "Failed to resolve group identifier\n");
 		return NULL;
@@ -114,7 +90,7 @@ int handle_netlink_msg(struct nl_msg *msg, void *arg)
 	tls_daemon_ctx_t *ctx = (tls_daemon_ctx_t *)arg;
 	struct nlmsghdr *nlh;
 	struct genlmsghdr *gnlh;
-	struct nlattr *attrs[SSA_NL_A_MAX + 1];
+	struct nlattr *attrs[GENL_BP_A_MAX + 1];
 
 	unsigned long id;
 	// char comm[PATH_MAX];
@@ -135,41 +111,41 @@ int handle_netlink_msg(struct nl_msg *msg, void *arg)
 	// Get Message
 	nlh = nlmsg_hdr(msg);
 	gnlh = (struct genlmsghdr *)nlmsg_data(nlh);
-	genlmsg_parse(nlh, 0, attrs, SSA_NL_A_MAX, ssa_nl_policy);
+	genlmsg_parse(nlh, 0, attrs, GENL_BP_A_MAX, nla_policy);
 	log_printf(LOG_INFO, "Received command of type %d\n", gnlh->cmd);
 	switch (gnlh->cmd)
 	{
 	// case SSA_NL_C_SOCKET_NOTIFY:
-	// 	id = nla_get_u64(attrs[SSA_NL_A_ID]);
+	// 	id = nla_get_u64(attrs[GENL_BP_A_ID]);
 	// 	log_printf(LOG_INFO, "Received socket notification for socket ID %lu\n", id);
 	// 	commlen = nla_len(attrs[SSA_NL_A_COMM]);
 	// 	memcpy(comm, nla_data(attrs[SSA_NL_A_COMM]), commlen);
 	// 	socket_cb(ctx, id, comm);
 	// 	break;
 	// case SSA_NL_C_SETSOCKOPT_NOTIFY:
-	// 	id = nla_get_u64(attrs[SSA_NL_A_ID]);
+	// 	id = nla_get_u64(attrs[GENL_BP_A_ID]);
 	// 	log_printf(LOG_INFO, "Received setsockopt notification for socket ID %lu\n", id);
 	// 	level = nla_get_u32(attrs[SSA_NL_A_OPTLEVEL]);
 	// 	optname = nla_get_u32(attrs[SSA_NL_A_OPTNAME]);
-	// 	optlen = nla_len(attrs[SSA_NL_A_OPTVAL]);
+	// 	optlen = nla_len(attrs[GENL_BP_A_OPTVAL]);
 	// 	optval = malloc(optlen);
 	// 	if (optval == NULL) {
 	// 		log_printf(LOG_ERROR, "Failed to allocate optval\n");
 	// 		return 1;
 	// 	}
-	// 	memcpy(optval, nla_data(attrs[SSA_NL_A_OPTVAL]), optlen);
+	// 	memcpy(optval, nla_data(attrs[GENL_BP_A_OPTVAL]), optlen);
 	// 	setsockopt_cb(ctx, id, level, optname, optval, optlen);
 	// 	free(optval);
 	// 	break;
 	// case SSA_NL_C_GETSOCKOPT_NOTIFY:
-	// 	id = nla_get_u64(attrs[SSA_NL_A_ID]);
+	// 	id = nla_get_u64(attrs[GENL_BP_A_ID]);
 	// 	log_printf(LOG_INFO, "Received getsockopt notification for socket ID %lu\n", id);
 	// 	level = nla_get_u32(attrs[SSA_NL_A_OPTLEVEL]);
 	// 	optname = nla_get_u32(attrs[SSA_NL_A_OPTNAME]);
 	// 	getsockopt_cb(ctx, id, level, optname);
 	// 	break;
 	// case SSA_NL_C_BIND_NOTIFY:
-	// 	id = nla_get_u64(attrs[SSA_NL_A_ID]);
+	// 	id = nla_get_u64(attrs[GENL_BP_A_ID]);
 	// 	addr_internal_len = nla_len(attrs[SSA_NL_A_SOCKADDR_INTERNAL]);
 	// 	addr_external_len = nla_len(attrs[SSA_NL_A_SOCKADDR_EXTERNAL]);
 	// 	addr_internal = *(struct sockaddr_in*)nla_data(attrs[SSA_NL_A_SOCKADDR_INTERNAL]);
@@ -181,7 +157,7 @@ int handle_netlink_msg(struct nl_msg *msg, void *arg)
 	// 			 (struct sockaddr*)&addr_external, addr_external_len);
 	// 	break;
 	// case SSA_NL_C_CONNECT_NOTIFY:
-	// 	id = nla_get_u64(attrs[SSA_NL_A_ID]);
+	// 	id = nla_get_u64(attrs[GENL_BP_A_ID]);
 	// 	addr_internal_len = nla_len(attrs[SSA_NL_A_SOCKADDR_INTERNAL]);
 	// 	addr_remote_len = nla_len(attrs[SSA_NL_A_SOCKADDR_REMOTE]);
 	// 	addr_internal = *(struct sockaddr_in*)nla_data(attrs[SSA_NL_A_SOCKADDR_INTERNAL]);
@@ -194,7 +170,7 @@ int handle_netlink_msg(struct nl_msg *msg, void *arg)
 	// 			    (struct sockaddr*)&addr_remote, addr_remote_len, blocking);
 	// 	break;
 	// case SSA_NL_C_LISTEN_NOTIFY:
-	// 	id = nla_get_u64(attrs[SSA_NL_A_ID]);
+	// 	id = nla_get_u64(attrs[GENL_BP_A_ID]);
 	// 	addr_internal_len = nla_len(attrs[SSA_NL_A_SOCKADDR_INTERNAL]);
 	// 	addr_external_len = nla_len(attrs[SSA_NL_A_SOCKADDR_EXTERNAL]);
 	// 	addr_internal = *(struct sockaddr_in*)nla_data(attrs[SSA_NL_A_SOCKADDR_INTERNAL]);
@@ -206,30 +182,30 @@ int handle_netlink_msg(struct nl_msg *msg, void *arg)
 	// 			 (struct sockaddr*)&addr_external, addr_external_len);
 	// 	break;
 	// case SSA_NL_C_ACCEPT_NOTIFY:
-	// 	id = nla_get_u64(attrs[SSA_NL_A_ID]);
+	// 	id = nla_get_u64(attrs[GENL_BP_A_ID]);
 	// 	addr_internal_len = nla_len(attrs[SSA_NL_A_SOCKADDR_INTERNAL]);
 	// 	addr_internal = *(struct sockaddr_in*)nla_data(attrs[SSA_NL_A_SOCKADDR_INTERNAL]);
 	// 	log_printf(LOG_INFO, "Received accept notification for socket ID %lu\n", id);
 	// 	associate_cb(ctx, id, (struct sockaddr*)&addr_internal, addr_internal_len);
 	// 	break;
 	// case SSA_NL_C_CLOSE_NOTIFY:
-	// 	id = nla_get_u64(attrs[SSA_NL_A_ID]);
+	// 	id = nla_get_u64(attrs[GENL_BP_A_ID]);
 	// 	log_printf(LOG_INFO, "Received close notification for socket ID %lu\n", id);
 	// 	close_cb(ctx, id);
 	// 	break;
-	case SSA_NL_C_BUNDLE_NOTIFY:
-		id = nla_get_u64(attrs[SSA_NL_A_ID]);
+	case GENL_BP_CMD_BUNDLE_NOTIFY:
+		id = nla_get_u64(attrs[GENL_BP_A_ID]);
 		log_printf(LOG_INFO, "Received setsockopt notification for socket ID %lu\n", id);
 		// level = nla_get_u32(attrs[SSA_NL_A_OPTLEVEL]);
 		// optname = nla_get_u32(attrs[SSA_NL_A_OPTNAME]);
-		optlen = nla_len(attrs[SSA_NL_A_OPTVAL]);
+		optlen = nla_len(attrs[GENL_BP_A_OPTVAL]);
 		optval = malloc(optlen);
 		if (optval == NULL)
 		{
 			log_printf(LOG_ERROR, "Failed to allocate optval\n");
 			return 1;
 		}
-		memcpy(optval, nla_data(attrs[SSA_NL_A_OPTVAL]), optlen);
+		memcpy(optval, nla_data(attrs[GENL_BP_A_OPTVAL]), optlen);
 
 		bundle_cb(ctx, id, optval, optlen);
 		free(optval);
@@ -260,19 +236,19 @@ void netlink_notify_kernel(tls_daemon_ctx_t *ctx, unsigned long id, int response
 		log_printf(LOG_ERROR, "Failed to allocate message buffer\n");
 		return;
 	}
-	msg_head = genlmsg_put(msg, NL_AUTO_PID, NL_AUTO_SEQ, ctx->netlink_family, 0, 0, SSA_NL_C_RETURN, 1);
+	msg_head = genlmsg_put(msg, NL_AUTO_PID, NL_AUTO_SEQ, ctx->netlink_family, 0, 0, GENL_BP_CMD_RETURN, 1);
 	if (msg_head == NULL)
 	{
 		log_printf(LOG_ERROR, "Failed in genlmsg_put\n");
 		return;
 	}
-	ret = nla_put_u64(msg, SSA_NL_A_ID, id);
+	ret = nla_put_u64(msg, GENL_BP_A_ID, id);
 	if (ret != 0)
 	{
 		log_printf(LOG_ERROR, "Failed to insert ID in netlink msg\n");
 		return;
 	}
-	ret = nla_put_u32(msg, SSA_NL_A_RETURN, response);
+	ret = nla_put_u32(msg, GENL_BP_A_RETURN, response);
 	if (ret != 0)
 	{
 		log_printf(LOG_ERROR, "Failed to insert response in netlink msg\n");
@@ -294,9 +270,9 @@ void netlink_send_and_notify_kernel(tls_daemon_ctx_t *ctx, char *data, unsigned 
 	int ret;
 	struct nl_msg *msg;
 	void *msg_head;
-	struct nlattr *attrs[SSA_NL_A_MAX + 1];
+	struct nlattr *attrs[GENL_BP_A_MAX + 1];
 
-	unsigned long id = nla_get_u64(attrs[SSA_NL_A_ID]);
+	unsigned long id = nla_get_u64(attrs[GENL_BP_A_ID]);
 	log_printf(LOG_INFO, "MESSAGE: %s, LENGTH: %d", data, len);
 
 	// Calculate message size
@@ -312,7 +288,7 @@ void netlink_send_and_notify_kernel(tls_daemon_ctx_t *ctx, char *data, unsigned 
 	}
 
 	// Construct the Generic Netlink message header
-	msg_head = genlmsg_put(msg, NL_AUTO_PID, NL_AUTO_SEQ, ctx->netlink_family, 0, 0, SSA_NL_C_RETURN, 1);
+	msg_head = genlmsg_put(msg, NL_AUTO_PID, NL_AUTO_SEQ, ctx->netlink_family, 0, 0, GENL_BP_CMD_RETURN, 1);
 	if (msg_head == NULL)
 	{
 		log_printf(LOG_ERROR, "Failed in genlmsg_put.\n");
@@ -321,7 +297,7 @@ void netlink_send_and_notify_kernel(tls_daemon_ctx_t *ctx, char *data, unsigned 
 	}
 
 	// Add the ID attribute
-	ret = nla_put_u64(msg, SSA_NL_A_ID, id);
+	ret = nla_put_u64(msg, GENL_BP_A_ID, id);
 	if (ret != 0)
 	{
 		log_printf(LOG_ERROR, "Failed to add ID attribute to Netlink message.\n");
@@ -330,7 +306,7 @@ void netlink_send_and_notify_kernel(tls_daemon_ctx_t *ctx, char *data, unsigned 
 	}
 
 	// Add the data attribute
-	ret = nla_put(msg, SSA_NL_A_OPTVAL, len, data);
+	ret = nla_put(msg, GENL_BP_A_OPTVAL, len, data);
 	if (ret != 0)
 	{
 		log_printf(LOG_ERROR, "Failed to add data attribute to Netlink message.\n");
@@ -370,12 +346,12 @@ void netlink_send_and_notify_kernel(tls_daemon_ctx_t *ctx, char *data, unsigned 
 // 		log_printf(LOG_ERROR, "Failed in genlmsg_put\n");
 // 		return;
 // 	}
-// 	ret = nla_put_u64(msg, SSA_NL_A_ID, id);
+// 	ret = nla_put_u64(msg, GENL_BP_A_ID, id);
 // 	if (ret != 0) {
 // 		log_printf(LOG_ERROR, "Failed to insert ID in netlink msg\n");
 // 		return;
 // 	}
-// 	ret = nla_put_u32(msg, SSA_NL_A_RETURN, response);
+// 	ret = nla_put_u32(msg, GENL_BP_A_RETURN, response);
 // 	if (ret != 0) {
 // 		log_printf(LOG_ERROR, "Failed to insert response in netlink msg\n");
 // 		return;

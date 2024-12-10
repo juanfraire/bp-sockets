@@ -27,21 +27,7 @@
 #ifndef NETLINK_H
 #define NETLINK_H
 
-#include <event2/util.h>
-#include <netlink/genl/genl.h>
-#include <netlink/genl/ctrl.h>
 #include "daemon.h"
-
-enum
-{
-    SSA_NL_A_UNSPEC,
-    SSA_NL_A_ID,
-    SSA_NL_A_RETURN,
-    SSA_NL_A_OPTVAL,
-    __SSA_NL_A_MAX,
-};
-
-#define SSA_NL_A_MAX (__SSA_NL_A_MAX - 1)
 
 int handle_netlink_msg(struct nl_msg *msg, void *arg);
 int netlink_disconnect(struct nl_sock *sock);

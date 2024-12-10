@@ -1,4 +1,5 @@
 #include <linux/module.h>
+#include <net/genetlink.h>
 #include <linux/init.h>
 #include <linux/uaccess.h>
 #include <linux/kernel.h>
@@ -11,12 +12,20 @@
 
 static int __init bp_init(void)
 {
+    int ret;
     int rc;
 
     pr_info("bp_init: initializing module\n");
 
-    register_netlink();
+    /* generic netlink */
+    ret = genl_register_family(&genl_fam);
+    if (unlikely(ret))
+    {
+        pr_crit("bp_init: failed to register generic netlink family\n");
+        return ret;
+    }
 
+    /* protocol */
     rc = proto_register(&bp_proto, 0);
     if (rc)
     {
@@ -41,7 +50,13 @@ static void __exit bp_exit(void)
     pr_info("bp_exit: unloading module\n");
     sock_unregister(AF_BP);
     proto_unregister(&bp_proto);
-    unregister_netlink();
+
+    if (unlikely(genl_unregister_family(&genl_fam)))
+    {
+        pr_err("bp_init: failed to unregister generic netlink family\n");
+        return;
+    }
+
     pr_info("bp_exit: module unloaded successfully\n");
 }
 
