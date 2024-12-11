@@ -32,7 +32,7 @@
 #include "netlink.h"
 #include "daemon.h"
 #include "log.h"
-#include "../genl_bp.h"
+#include "../common.h"
 
 struct nl_sock *netlink_connect(tls_daemon_ctx_t *ctx)
 {
@@ -92,7 +92,7 @@ int handle_netlink_msg(struct nl_msg *msg, void *arg)
 	struct genlmsghdr *gnlh;
 	struct nlattr *attrs[GENL_BP_A_MAX + 1];
 
-	unsigned long id;
+	unsigned long sockid;
 	// char comm[PATH_MAX];
 	// int addr_internal_len;
 	// int addr_external_len;
@@ -116,8 +116,8 @@ int handle_netlink_msg(struct nl_msg *msg, void *arg)
 	switch (gnlh->cmd)
 	{
 	case GENL_BP_CMD_BUNDLE_NOTIFY:
-		id = nla_get_u64(attrs[GENL_BP_A_SOCKID]);
-		log_printf(LOG_INFO, "Received setsockopt notification for socket ID %lu\n", id);
+		sockid = nla_get_u64(attrs[GENL_BP_A_SOCKID]);
+		log_printf(LOG_INFO, "Received setsockopt notification for socket ID %lu\n", sockid);
 
 		payload_size = nla_len(attrs[GENL_BP_A_PAYLOAD]);
 		payload = malloc(payload_size);
@@ -137,7 +137,7 @@ int handle_netlink_msg(struct nl_msg *msg, void *arg)
 		}
 		memcpy(eid, nla_data(attrs[GENL_BP_A_EID]), eid_size);
 
-		bundle_cb(ctx, id, payload, payload_size, eid, eid_size);
+		bp_send_cb(ctx, payload, payload_size, eid, eid_size);
 
 		free(payload);
 		break;

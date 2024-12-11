@@ -69,6 +69,7 @@ typedef struct sock_ctx
 } sock_ctx_t;
 
 void bp_receive_cb(evutil_socket_t fd, short events, void *arg);
+int bp_send_cb(tls_daemon_ctx_t *ctx, char *payload, int payload_size, char *eid, int eid_size);
 /* SSA direct functions */
 // static void accept_error_cb(struct evconnlistener *listener, void *ctx);
 // static void accept_cb(struct evconnlistener *listener, evutil_socket_t fd,
@@ -82,7 +83,6 @@ evutil_socket_t create_server_socket(ev_uint16_t port, int family, int protocol)
 // 	struct sockaddr *address, int socklen, void *arg);
 void free_sock_ctx(sock_ctx_t *sock_ctx);
 int mainloop(int port);
-void bundle_cb(tls_daemon_ctx_t *ctx, unsigned long sockid, char *payload, int payload_size, char *eid, int eid_size);
 // void socket_cb(tls_daemon_ctx_t* ctx, unsigned long id, char* comm);
 // void setsockopt_cb(tls_daemon_ctx_t* ctx, unsigned long id, int level,
 // 		int option, void* value, socklen_t len);

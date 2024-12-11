@@ -1,5 +1,5 @@
 #include <net/genetlink.h>
-#include "../genl_bp.h"
+#include "../common.h"
 #include "netlink.h"
 
 static struct genl_ops genl_ops[] = {
