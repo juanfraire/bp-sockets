@@ -96,58 +96,54 @@ void nl_recvmsg(evutil_socket_t fd, short events, void *arg)
 int nl_recvmsg_cb(struct nl_msg *msg, void *arg)
 {
 	tls_daemon_ctx_t *ctx = (tls_daemon_ctx_t *)arg;
-	struct nlmsghdr *nlh;
-	struct genlmsghdr *gnlh;
+	struct genlmsghdr *genlhdr = nlmsg_data(nlmsg_hdr(msg));
 	struct nlattr *attrs[GENL_BP_A_MAX + 1];
-
-	unsigned long sockid;
-	// char comm[PATH_MAX];
-	// int addr_internal_len;
-	// int addr_external_len;
-	// int addr_remote_len;
-	// struct sockaddr_in addr_internal;
-	// struct sockaddr_in addr_external;
-	// struct sockaddr_in addr_remote;
-
-	// int level;
-	// int blocking;
-	// int optname;
-	// int commlen;
+	int err = 0;
 	char *payload, *eid;
 	int payload_size, eid_size;
+	unsigned long sockid;
 
-	// Get Message
-	nlh = nlmsg_hdr(msg);
-	gnlh = (struct genlmsghdr *)nlmsg_data(nlh);
-	genlmsg_parse(nlh, 0, attrs, GENL_BP_A_MAX, nla_policy);
-	log_printf(LOG_INFO, "Received command of type %d\n", gnlh->cmd);
-	switch (gnlh->cmd)
+	log_printf(LOG_INFO, "Received command of type %d\n", genlhdr->cmd);
+
+	/* Parse the attributes */
+	err = nla_parse(attrs, GENL_BP_A_MAX, genlmsg_attrdata(genlhdr, 0), genlmsg_attrlen(genlhdr, 0), NULL);
+	if (err)
+	{
+		log_printf(LOG_ERROR, "unable to parse message: %s\n", strerror(-err));
+		return NL_SKIP;
+	}
+
+	switch (genlhdr->cmd)
 	{
 	case GENL_BP_CMD_SEND_BUNDLE:
+		if (!attrs[GENL_BP_A_SOCKID])
+		{
+			log_printf(LOG_ERROR, "attribute missing from message\n");
+			return NL_SKIP;
+		}
 		sockid = nla_get_u64(attrs[GENL_BP_A_SOCKID]);
 		log_printf(LOG_INFO, "Received setsockopt notification for socket ID %lu\n", sockid);
 
-		payload_size = nla_len(attrs[GENL_BP_A_PAYLOAD]);
-		payload = malloc(payload_size);
-		if (payload == NULL)
+		if (!attrs[GENL_BP_A_PAYLOAD])
 		{
-			log_printf(LOG_ERROR, "Failed to allocate optval\n");
-			return 1;
+			log_printf(LOG_ERROR, "attribute missing from message\n");
+			return NL_SKIP;
 		}
-		memcpy(payload, nla_data(attrs[GENL_BP_A_PAYLOAD]), payload_size);
+		payload = nla_get_string(attrs[GENL_BP_A_PAYLOAD]);
+		payload_size = strlen(payload) + 1;
 
-		eid_size = nla_len(attrs[GENL_BP_A_EID]);
-		eid = malloc(eid_size);
-		if (eid == NULL)
+		if (!attrs[GENL_BP_A_EID])
 		{
-			log_printf(LOG_ERROR, "Failed to allocate optval\n");
-			return 1;
+			log_printf(LOG_ERROR, "attribute missing from message\n");
+			return NL_SKIP;
 		}
-		memcpy(eid, nla_data(attrs[GENL_BP_A_EID]), eid_size);
+		eid = nla_get_string(attrs[GENL_BP_A_EID]);
+		eid_size = strlen(eid) + 1;
+
+		log_printf(LOG_INFO, "[size=%d] eid: %s\n", eid_size, eid);
+		log_printf(LOG_INFO, "[size=%d] payload: %s\n", payload_size, payload);
 
 		bp_send_cb(ctx, payload, payload_size, eid, eid_size);
-
-		free(payload);
 		break;
 	case GENL_BP_CMD_RECV_BUNDLE:
 
