@@ -22,7 +22,8 @@ enum genl_bp_attrs
 enum genl_bp_cmds
 {
     GENL_BP_CMD_UNSPEC,
-    GENL_BP_CMD_BUNDLE_NOTIFY,
+    GENL_BP_CMD_SEND_BUNDLE,
+    GENL_BP_CMD_RECV_BUNDLE,
     GENL_BP_CMD_RETURN,
     __GENL_BP_CMD_MAX,
 };

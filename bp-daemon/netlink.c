@@ -27,65 +27,73 @@
 
 #include <linux/limits.h>
 #include <event2/util.h>
-#include <netlink/genl/genl.h>
+#include <netlink/socket.h>
+#include <netlink/netlink.h>
 #include <netlink/genl/ctrl.h>
+#include <netlink/genl/genl.h>
+#include <netlink/genl/family.h>
 #include "netlink.h"
 #include "daemon.h"
 #include "log.h"
 #include "../common.h"
 
-struct nl_sock *netlink_connect(tls_daemon_ctx_t *ctx)
+struct nl_sock *nl_connect_and_configure(tls_daemon_ctx_t *ctx)
 {
-	int group;
-	int family;
-	struct nl_sock *netlink_sock = nl_socket_alloc();
-	nl_socket_set_local_port(netlink_sock, ctx->port);
-	nl_socket_disable_seq_check(netlink_sock);
-	ctx->netlink_sock = netlink_sock;
-	nl_socket_modify_cb(netlink_sock, NL_CB_VALID, NL_CB_CUSTOM, handle_netlink_msg, (void *)ctx);
-	if (netlink_sock == NULL)
+	int mcgrp, fam, ret;
+	struct nl_sock *sk;
+
+	sk = nl_socket_alloc();
+	if (!sk)
 	{
-		log_printf(LOG_ERROR, "Failed to allocate socket\n");
+		log_printf(LOG_ERROR, "failed to allocate socket\n");
+		return NULL;
+	}
+	nl_socket_disable_seq_check(sk);
+	nl_socket_set_local_port(sk, ctx->port);
+	nl_socket_modify_cb(sk, NL_CB_VALID, NL_CB_CUSTOM, nl_recvmsg_cb, (void *)ctx);
+	genl_connect(sk);
+
+	/* Resolve the genl family. One family for both unicast and multicast. */
+	fam = genl_ctrl_resolve(sk, GENL_BP_NAME);
+	if (fam < 0)
+	{
+		log_printf(LOG_ERROR, "failed to resolve generic netlink family: %s\n",
+				   strerror(-fam));
 		return NULL;
 	}
 
-	if (genl_connect(netlink_sock) != 0)
+	nl_socket_set_peer_port(sk, 0);
+
+	/* Resolve the multicast group. */
+	mcgrp = genl_ctrl_resolve_grp(sk, GENL_BP_NAME, GENL_BP_MC_GRP_NAME);
+	if (mcgrp < 0)
 	{
-		log_printf(LOG_ERROR, "Failed to connect to Generic Netlink control\n");
+		log_printf(LOG_ERROR, "failed to resolve generic netlink multicast group: %s\n",
+				   strerror(-mcgrp));
 		return NULL;
 	}
 
-	if ((family = genl_ctrl_resolve(netlink_sock, GENL_BP_NAME)) < 0)
+	/* Join the multicast group. */
+	if ((ret = nl_socket_add_membership(sk, mcgrp) < 0))
 	{
-		log_printf(LOG_ERROR, "Failed to resolve SSA family identifier\n");
-		return NULL;
-	}
-	ctx->netlink_family = family;
-
-	if ((group = genl_ctrl_resolve_grp(netlink_sock, GENL_BP_NAME, GENL_BP_MC_GRP_NAME)) < 0)
-	{
-		log_printf(LOG_ERROR, "Failed to resolve group identifier\n");
+		log_printf(LOG_ERROR, "failed to join multicast group: %s\n", strerror(-ret));
 		return NULL;
 	}
 
-	if (nl_socket_add_membership(netlink_sock, group) < 0)
-	{
-		log_printf(LOG_ERROR, "Failed to add membership to group\n");
-		return NULL;
-	}
-	nl_socket_set_peer_port(netlink_sock, 0);
-	return netlink_sock;
+	ctx->netlink_sock = sk;
+	ctx->netlink_family = fam;
+
+	return sk;
 }
 
-void netlink_recv(evutil_socket_t fd, short events, void *arg)
+void nl_recvmsg(evutil_socket_t fd, short events, void *arg)
 {
-	// log_printf(LOG_INFO, "Got a message from the kernel!\n");
-	struct nl_sock *netlink_sock = (struct nl_sock *)arg;
-	nl_recvmsgs_default(netlink_sock);
+	log_printf(LOG_INFO, "listening for messages\n");
+	nl_recvmsgs_default((struct nl_sock *)arg);
 	return;
 }
 
-int handle_netlink_msg(struct nl_msg *msg, void *arg)
+int nl_recvmsg_cb(struct nl_msg *msg, void *arg)
 {
 	tls_daemon_ctx_t *ctx = (tls_daemon_ctx_t *)arg;
 	struct nlmsghdr *nlh;
@@ -115,7 +123,7 @@ int handle_netlink_msg(struct nl_msg *msg, void *arg)
 	log_printf(LOG_INFO, "Received command of type %d\n", gnlh->cmd);
 	switch (gnlh->cmd)
 	{
-	case GENL_BP_CMD_BUNDLE_NOTIFY:
+	case GENL_BP_CMD_SEND_BUNDLE:
 		sockid = nla_get_u64(attrs[GENL_BP_A_SOCKID]);
 		log_printf(LOG_INFO, "Received setsockopt notification for socket ID %lu\n", sockid);
 
@@ -141,6 +149,8 @@ int handle_netlink_msg(struct nl_msg *msg, void *arg)
 
 		free(payload);
 		break;
+	case GENL_BP_CMD_RECV_BUNDLE:
+
 	default:
 		log_printf(LOG_ERROR, "unrecognized command\n");
 		break;
@@ -148,7 +158,7 @@ int handle_netlink_msg(struct nl_msg *msg, void *arg)
 	return 0;
 }
 
-int netlink_disconnect(struct nl_sock *sock)
+int nl_disconnect(struct nl_sock *sock)
 {
 	nl_socket_free(sock);
 	return 0;
@@ -260,39 +270,3 @@ void netlink_send_and_notify_kernel(tls_daemon_ctx_t *ctx, char *data, unsigned 
 	nlmsg_free(msg);
 	return;
 }
-
-// void netlink_handshake_notify_kernel(tls_daemon_ctx_t* ctx, unsigned long id, int response) {
-// 	int ret;
-// 	struct nl_msg* msg;
-// 	void* msg_head;
-// 	int msg_size = NLMSG_HDRLEN + GENL_HDRLEN +
-// 		nla_total_size(sizeof(id)) + nla_total_size(sizeof(response));
-// 	msg = nlmsg_alloc_size(msg_size);
-// 	if (msg == NULL) {
-// 		log_printf(LOG_ERROR, "Failed to allocate message buffer\n");
-// 		return;
-// 	}
-// 	msg_head = genlmsg_put(msg, NL_AUTO_PID, NL_AUTO_SEQ, ctx->netlink_family, 0, 0, SSA_NL_C_HANDSHAKE_RETURN, 1);
-// 	if (msg_head == NULL) {
-// 		log_printf(LOG_ERROR, "Failed in genlmsg_put\n");
-// 		return;
-// 	}
-// 	ret = nla_put_u64(msg, GENL_BP_A_SOCKID, id);
-// 	if (ret != 0) {
-// 		log_printf(LOG_ERROR, "Failed to insert ID in netlink msg\n");
-// 		return;
-// 	}
-// 	ret = nla_put_u32(msg, GENL_BP_A_RETURN, response);
-// 	if (ret != 0) {
-// 		log_printf(LOG_ERROR, "Failed to insert response in netlink msg\n");
-// 		return;
-// 	}
-// 	ret = nl_send_auto(ctx->netlink_sock, msg);
-// 	if (ret < 0) {
-// 		log_printf(LOG_ERROR, "Failed to send netlink msg\n");
-// 		return;
-// 	}
-// 	//log_printf(LOG_INFO, "Sent data msg to kernel\n");
-// 	nlmsg_free(msg);
-// 	return;
-// }

@@ -100,7 +100,7 @@ int mainloop(int port)
 	// evconnlistener_set_error_cb(listener, accept_error_cb);
 
 	/* Set up netlink socket with event base */
-	netlink_sock = netlink_connect(&daemon_ctx);
+	netlink_sock = nl_connect_and_configure(&daemon_ctx);
 	if (netlink_sock == NULL)
 	{
 		log_printf(LOG_ERROR, "Couldn't create Netlink socket\n");
@@ -112,7 +112,7 @@ int mainloop(int port)
 		log_printf(LOG_ERROR, "Failed in evutil_make_socket_nonblocking: %s\n",
 				   evutil_socket_error_to_string(EVUTIL_SOCKET_ERROR()));
 	}
-	event_on_nl_sock = event_new(base, nl_socket_get_fd(netlink_sock), EV_READ | EV_PERSIST, netlink_recv, netlink_sock);
+	event_on_nl_sock = event_new(base, nl_socket_get_fd(netlink_sock), EV_READ | EV_PERSIST, nl_recvmsg, netlink_sock);
 	if (event_add(event_on_nl_sock, NULL) == -1)
 	{
 		log_printf(LOG_ERROR, "Couldn't add Netlink event\n");
@@ -128,6 +128,7 @@ int mainloop(int port)
 
 	recv_ctx = malloc(sizeof(receiver_context_t));
 	recv_ctx->daemon_ctx = daemon_ctx;
+
 	isprintf(ownEid, sizeof ownEid, "ipn:%d.1", getOwnNodeNbr());
 	log_printf(LOG_INFO, "My own EID is \"%s\".\n", ownEid);
 	if (bp_open(ownEid, &recv_ctx->txSap) < 0)
@@ -147,7 +148,7 @@ int mainloop(int port)
 	/* Main event loop */
 	event_base_dispatch(base);
 	log_printf(LOG_INFO, "Main event loop terminated\n");
-	netlink_disconnect(netlink_sock);
+	nl_disconnect(netlink_sock);
 
 	/* Cleanup */
 	// evconnlistener_free(listener); /* This also closes the socket due to our listener creation flags */
