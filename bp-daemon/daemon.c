@@ -130,7 +130,7 @@ int mainloop(int port)
 	recv_ctx->daemon_ctx = daemon_ctx;
 
 	isprintf(ownEid, sizeof ownEid, "ipn:%d.1", getOwnNodeNbr());
-	log_printf(LOG_INFO, "My own EID is \"%s\".\n", ownEid);
+	log_printf(LOG_INFO, "ION is running with EID: %s\n", ownEid);
 	if (bp_open(ownEid, &recv_ctx->txSap) < 0)
 	{
 		log_printf(LOG_ERROR, "bptrace can't open own endpoint.\n");
@@ -143,7 +143,7 @@ int mainloop(int port)
 		return 1;
 	}
 
-	log_printf(LOG_INFO, "Before mainloop\n");
+	log_printf(LOG_INFO, "Main event loop started\n");
 
 	/* Main event loop */
 	event_base_dispatch(base);

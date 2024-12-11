@@ -88,7 +88,6 @@ struct nl_sock *nl_connect_and_configure(tls_daemon_ctx_t *ctx)
 
 void nl_recvmsg(evutil_socket_t fd, short events, void *arg)
 {
-	log_printf(LOG_INFO, "listening for messages\n");
 	nl_recvmsgs_default((struct nl_sock *)arg);
 	return;
 }
@@ -103,7 +102,7 @@ int nl_recvmsg_cb(struct nl_msg *msg, void *arg)
 	int payload_size, eid_size;
 	unsigned long sockid;
 
-	log_printf(LOG_INFO, "Received command of type %d\n", genlhdr->cmd);
+	log_printf(LOG_INFO, "Netlink recvmsg command: %s\n", genl_bp_cmds_string[genlhdr->cmd]);
 
 	/* Parse the attributes */
 	err = nla_parse(attrs, GENL_BP_A_MAX, genlmsg_attrdata(genlhdr, 0), genlmsg_attrlen(genlhdr, 0), NULL);

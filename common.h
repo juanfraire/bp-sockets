@@ -30,6 +30,13 @@ enum genl_bp_cmds
 
 #define GENL_BP_CMD_MAX (__GENL_BP_CMD_MAX - 1)
 
+static char *genl_bp_cmds_string[] = {
+    "GENL_BP_CMD_UNSPEC",
+    "GENL_BP_CMD_SEND_BUNDLE",
+    "GENL_BP_CMD_RECV_BUNDLE",
+    "GENL_BP_CMD_RETURN",
+};
+
 static const struct nla_policy nla_policy[GENL_BP_A_MAX + 1] = {
     [GENL_BP_A_UNSPEC] = {.type = NLA_UNSPEC},
     [GENL_BP_A_SOCKID] = {.type = NLA_U64},
