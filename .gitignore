@@ -57,4 +57,5 @@ dkms.conf
 
 bp-daemon/bp_daemon
 ion.log
-bp-user-app-with-sock
+demo-app-bp-send
+demo-app-bp-recv
