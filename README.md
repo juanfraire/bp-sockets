@@ -261,9 +261,9 @@ make
 ```bash
 cd /home/debian/bp-sockets
 
-gcc -o bp-user-app-with-sock bp-user-app-with-sock.c
-./bp-user-app-with-sock ipn:<HOST_ID_DESTINATION>.1
-# Example for '192.168.122.182': ./bp-user-app-with-sock ipn:182.1
+gcc -o demo-app-bp-send demo-app-bp-send.c
+./demo-app-bp-send ipn:<HOST_ID_DESTINATION>.1
+# Example for '192.168.122.182': ./demo-app-bp-send ipn:182.1
 ```
 
 #### VM2 Setup: `ud3tn-node`

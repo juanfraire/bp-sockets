@@ -1,4 +1,4 @@
-bp-objs := netlink.o proto_sock.o module.o
+bp-objs := genl_bp.o af_bp.o bp_mod.o
 obj-m += bp.o
 
 KDIR := /lib/modules/$(shell uname -r)/build

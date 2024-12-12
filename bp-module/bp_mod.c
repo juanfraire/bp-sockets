@@ -7,8 +7,10 @@
 #include <linux/socket.h>
 #include <linux/fs.h>
 #include <net/sock.h>
-#include "netlink.h"
-#include "proto_sock.h"
+#include <linux/semaphore.h>
+#include "genl_bp.h"
+#include "af_bp.h"
+#include "../common.h"
 
 static int __init bp_init(void)
 {
@@ -33,7 +35,7 @@ static int __init bp_init(void)
         return rc;
     }
 
-    rc = sock_register(&bp_net_proto);
+    rc = sock_register(&bp_family_ops);
     if (rc)
     {
         pr_err("bp_init: failed to register socket family\n");

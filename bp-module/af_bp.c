@@ -1,21 +1,19 @@
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <net/sock.h>
-#include "proto_sock.h"
-#include "netlink.h"
-
-#define AF_BP 28
+#include "af_bp.h"
+#include "genl_bp.h"
+#include "../common.h"
 
 struct proto bp_proto = {
-    .init = bp_init_sock,            // Initialization function for the protocol
-    .obj_size = sizeof(struct sock), // Size of the protocol's socket structure
-    .owner = THIS_MODULE,            // Owner module (if any)
-    .name = "BP",                    // Name of your protocol
+    .name = "BP",
+    .owner = THIS_MODULE,
+    .obj_size = sizeof(struct sock),
 };
 
-const struct net_proto_family bp_net_proto = {
+const struct net_proto_family bp_family_ops = {
     .family = AF_BP,
-    .create = bp_create_socket,
+    .create = bp_create,
     .owner = THIS_MODULE,
 };
 
@@ -23,7 +21,7 @@ struct proto_ops bp_proto_ops = {
     .family = AF_BP,
     .owner = THIS_MODULE,
     .release = bp_release,
-    .bind = sock_no_bind,
+    .bind = bp_bind,
     .connect = sock_no_connect,
     .socketpair = sock_no_socketpair,
     .sendmsg_locked = sock_no_sendmsg_locked,
@@ -39,77 +37,53 @@ struct proto_ops bp_proto_ops = {
     .sendmsg = bp_sendmsg,
     .recvmsg = bp_recvmsg};
 
-int bp_init_sock(struct sock *sk)
-{
-    pr_info("in the .init");
-    // Initialization logic specific to your protocol
-    // Typically involves initializing socket specific data structures
-
-    return 0; // Return 0 for success, or an error code
-}
-
-int bp_create_socket(struct net *net, struct socket *sock, int protocol, int kern)
+int bp_create(struct net *net, struct socket *sock, int protocol, int kern)
 {
     struct sock *sk;
-    // int rc;
+    int rc = -EAFNOSUPPORT;
 
-    sk = sk_alloc(net, AF_BP, GFP_KERNEL, &bp_proto, 1);
-    if (!sk)
-    {
-        printk("failed to allocate socket.\n");
-        return -ENOMEM;
-    }
+    if (!net_eq(net, &init_net))
+        goto out;
+
+    rc = -ENOMEM;
+    if ((sk = sk_alloc(net, AF_BP, GFP_KERNEL, &bp_proto, 1)) == NULL)
+        goto out;
 
     sock_init_data(sock, sk);
+    sock->ops = &bp_proto_ops;
     sk->sk_protocol = protocol;
 
-    sock->ops = &bp_proto_ops;
+    rc = 0;
+out:
+    return rc;
+}
 
-    /* Do the protocol specific socket object initialization */
-    return 0;
+int bp_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
+{
+    // struct sock *sk = sock->sk;
+    struct sockaddr_bp *bp_addr = (struct sockaddr_bp *)addr;
+    int rc = 0;
+
+    if (addr_len != sizeof(struct sockaddr_bp) ||
+        bp_addr->sbp_family != AF_BP || bp_addr->sbp_agent_id < 1)
+    {
+        rc = -EINVAL;
+        goto out;
+    }
+
+out:
+    return rc;
 }
 
 int bp_release(struct socket *sock)
 {
     struct sock *sk = sock->sk;
+    if (!sk)
+        return 0;
+    sock_hold(sk);
     sock_put(sk);
-    sock->sk = NULL;
-
     return 0;
 }
-/* int bp_sendmsg(struct socket *sock, struct msghdr *msg, size_t size)
-{
-
-
-    ssize_t written;
-    void *data;
-
-    pr_info("bp_sendmsg: entering function 2.0\n");
-
-    data = kmalloc(size, GFP_KERNEL);
-    if (!data) {
-        pr_err("bp_sendmsg: failed to allocate memory\n");
-        return -ENOMEM;
-    }
-
-    if (copy_from_iter(data, size, &msg->msg_iter) != size) {
-        pr_err("bp_sendmsg: failed to copy data from user\n");
-        kfree(data);
-        return -EFAULT;
-    }
-
-    printk(KERN_INFO "msg : %zu \n", size);
-
-    unsigned long id = (unsigned long) sock->sk->sk_socket;
-    send_bundle_notification(id, data, size, 8443);
-
-
-    kfree(data);
-    pr_info("bp_sendmsg: exiting function 2.0\n");
-
-    return -EOPNOTSUPP;
-}
-*/
 
 int bp_sendmsg(struct socket *sock, struct msghdr *msg, size_t size)
 {
@@ -139,7 +113,7 @@ int bp_sendmsg(struct socket *sock, struct msghdr *msg, size_t size)
     }
 
     // Get the sockaddr from the msghdr
-    pr_info("[size=%zu] eid: %s\n", eid_size, eid);
+    pr_info("[size=%d] eid: %s\n", eid_size, eid);
     pr_info("[size=%zu] payload: %s\n", size, (char *)payload);
 
     sockid = (unsigned long)sock->sk->sk_socket;
@@ -153,5 +127,14 @@ int bp_sendmsg(struct socket *sock, struct msghdr *msg, size_t size)
 
 int bp_recvmsg(struct socket *sock, struct msghdr *msg, size_t size, int flags)
 {
-    return -EOPNOTSUPP;
+    unsigned long sockid;
+
+    pr_info("bp_recvmsg: entering function 2.0\n");
+
+    sockid = (unsigned long)sock->sk->sk_socket;
+    pr_info("bp_recvmsg: Hello from bp_recvmsg\n");
+
+    pr_info("bp_recvmsg: exiting function 2.0\n");
+
+    return 0;
 }
