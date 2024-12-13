@@ -1,5 +1,5 @@
-#ifndef GENL_BP_H
-#define GENL_BP_H
+#ifndef BP_NL_GEN_H
+#define BP_NL_GEN_H
 
 extern struct genl_family genl_fam;
 

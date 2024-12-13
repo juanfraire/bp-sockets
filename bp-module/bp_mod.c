@@ -8,7 +8,7 @@
 #include <linux/fs.h>
 #include <net/sock.h>
 #include <linux/semaphore.h>
-#include "genl_bp.h"
+#include "bp_nl_gen.h"
 #include "af_bp.h"
 #include "../common.h"
 
