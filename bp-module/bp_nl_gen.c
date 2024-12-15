@@ -4,14 +4,14 @@
 
 static struct genl_ops genl_ops[] = {
 	// {
-	// 	.cmd = GENL_BP_CMD_SEND_BUNDLE,
+	// 	.cmd = GENL_BP_CMD_FORWARD_BUNDLE,
 	// 	.flags = GENL_ADMIN_PERM,
 	// 	.policy = nla_policy,
 	// 	.doit = fail_doit,
 	// 	.dumpit = NULL,
 	// },
 	{
-		.cmd = GENL_BP_CMD_BUNDLE_REPLY,
+		.cmd = GENL_BP_CMD_REPLY_BUNDLE,
 		.flags = GENL_ADMIN_PERM,
 		.policy = nla_policy,
 		.doit = recv_bundle_doit,
@@ -42,7 +42,7 @@ int fail_doit(struct sk_buff *skb, struct genl_info *info)
 	return -1;
 }
 
-int send_bundle_doit(unsigned long sockid, char *payload, int payload_size, char *eid, int eid_size, int port_id)
+int send_bundle_doit(u64 sockid, char *payload, int payload_size, char *eid, int eid_size, int port_id)
 {
 	int ret = 0;
 	void *hdr;
@@ -50,9 +50,10 @@ int send_bundle_doit(unsigned long sockid, char *payload, int payload_size, char
 	int msg_size;
 
 	/* Allocate a new buffer for the reply */
-	msg_size = nla_total_size(sizeof(unsigned long)) +
+	msg_size = nla_total_size(sizeof(u64)) +
+			   nla_total_size(eid_size) +
 			   nla_total_size(payload_size);
-	msg = genlmsg_new(msg_size, GFP_KERNEL);
+	msg = genlmsg_new(msg_size + GENL_HDRLEN, GFP_KERNEL);
 	if (!msg)
 	{
 		pr_err("failed to allocate message buffer\n");
@@ -60,7 +61,7 @@ int send_bundle_doit(unsigned long sockid, char *payload, int payload_size, char
 	}
 
 	/* Put the Generic Netlink header */
-	hdr = genlmsg_put(msg, 0, 0, &genl_fam, 0, GENL_BP_CMD_SEND_BUNDLE);
+	hdr = genlmsg_put(msg, 0, 0, &genl_fam, 0, GENL_BP_CMD_FORWARD_BUNDLE);
 	if (!hdr)
 	{
 		pr_err("failed to create genetlink header\n");
@@ -69,21 +70,21 @@ int send_bundle_doit(unsigned long sockid, char *payload, int payload_size, char
 	}
 
 	/* And the message */
-	if ((ret = nla_put(msg, GENL_BP_A_PAYLOAD, payload_size, payload)))
+	if ((ret = nla_put_string(msg, GENL_BP_A_PAYLOAD, payload)))
 	{
 		pr_err("failed to create message string\n");
 		genlmsg_cancel(msg, hdr);
 		nlmsg_free(msg);
 		goto out;
 	}
-	if ((ret = nla_put(msg, GENL_BP_A_EID, eid_size, eid)))
+	if ((ret = nla_put_string(msg, GENL_BP_A_EID, eid)))
 	{
 		pr_err("failed to create message string\n");
 		genlmsg_cancel(msg, hdr);
 		nlmsg_free(msg);
 		goto out;
 	}
-	if ((ret = nla_put(msg, GENL_BP_A_SOCKID, sizeof(sockid), &sockid)))
+	if ((ret = nla_put_u64_64bit(msg, GENL_BP_A_SOCKID, sockid, 0)))
 	{
 		pr_err("failed to create message string\n");
 		genlmsg_cancel(msg, hdr);
@@ -103,14 +104,16 @@ out:
 	return 0;
 }
 
-int notify_deamon_doit(unsigned int agent_id, int port_id)
+int notify_deamon_doit(u32 agent_id, int port_id)
 {
 	int ret = 0;
 	void *hdr;
 	struct sk_buff *msg;
+	int msg_size;
 
 	/* Allocate a new buffer for the reply */
-	msg = genlmsg_new(NLMSG_DEFAULT_SIZE, GFP_KERNEL);
+	msg_size = nla_total_size(sizeof(u32));
+	msg = genlmsg_new(msg_size + GENL_HDRLEN, GFP_KERNEL);
 	if (!msg)
 	{
 		pr_err("failed to allocate message buffer\n");
@@ -118,7 +121,7 @@ int notify_deamon_doit(unsigned int agent_id, int port_id)
 	}
 
 	/* Put the Generic Netlink header */
-	hdr = genlmsg_put(msg, 0, 0, &genl_fam, 0, GENL_BP_CMD_BUNDLE_REQUEST);
+	hdr = genlmsg_put(msg, 0, 0, &genl_fam, 0, GENL_BP_CMD_REQUEST_BUNDLE);
 	if (!hdr)
 	{
 		pr_err("failed to create genetlink header\n");
@@ -127,7 +130,7 @@ int notify_deamon_doit(unsigned int agent_id, int port_id)
 	}
 
 	/* And the message */
-	if ((ret = nla_put(msg, GENL_BP_A_AGENT_ID, sizeof(agent_id), agent_id)))
+	if ((ret = nla_put_u32(msg, GENL_BP_A_AGENT_ID, agent_id)))
 	{
 		pr_err("failed to create message string\n");
 		genlmsg_cancel(msg, hdr);

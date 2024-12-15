@@ -136,7 +136,7 @@ int bp_sendmsg(struct socket *sock, struct msghdr *msg, size_t size)
     char *eid;
     void *payload;
     int eid_size;
-    unsigned long sockid;
+    u32 sockid;
 
     addr = (struct sockaddr *)msg->msg_name;
     eid = addr->sa_data;
@@ -161,7 +161,7 @@ int bp_sendmsg(struct socket *sock, struct msghdr *msg, size_t size)
     pr_info("[size=%d] eid: %s\n", eid_size, eid);
     pr_info("[size=%zu] payload: %s\n", size, (char *)payload);
 
-    sockid = (unsigned long)sock->sk->sk_socket;
+    sockid = (u32)sock->sk->sk_socket;
     send_bundle_doit(sockid, (char *)payload, size, eid, eid_size, 8443);
 
     kfree(payload);
@@ -174,13 +174,14 @@ int bp_recvmsg(struct socket *sock, struct msghdr *msg, size_t size, int flags)
 {
     struct sock *sk = sock->sk;
     struct bp_sock *bp = bp_sk(sk);
-    unsigned int agent_id = bp->bp_agent_id;
+    u32 agent_id = bp->bp_agent_id;
+    int ret;
 
     pr_info("bp_recvmsg: entering function 2.0\n");
 
     lock_sock(sk);
     pr_info("bp_recvmsg: %d\n", agent_id);
-    // notify_deamon_doit(agent_id, 8443);
+    notify_deamon_doit(agent_id, 8443);
     release_sock(sk);
 
     pr_info("bp_recvmsg: exiting function 2.0\n");

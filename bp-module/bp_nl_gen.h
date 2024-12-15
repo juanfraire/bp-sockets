@@ -4,8 +4,8 @@
 extern struct genl_family genl_fam;
 
 int fail_doit(struct sk_buff *skb, struct genl_info *info);
-int send_bundle_doit(unsigned long id, char *payload, int payload_size, char *eid, int eid_size, int port_id);
+int send_bundle_doit(u64 sockid, char *payload, int payload_size, char *eid, int eid_size, int port_id);
 int recv_bundle_doit(struct sk_buff *skb, struct genl_info *info);
-int notify_deamon_doit(unsigned int agent_id, int port_id);
+int notify_deamon_doit(u32 agent_id, int port_id);
 
 #endif

@@ -24,9 +24,9 @@ enum genl_bp_attrs
 enum genl_bp_cmds
 {
     GENL_BP_CMD_UNSPEC,
-    GENL_BP_CMD_SEND_BUNDLE,
-    GENL_BP_CMD_BUNDLE_REQUEST,
-    GENL_BP_CMD_BUNDLE_REPLY,
+    GENL_BP_CMD_FORWARD_BUNDLE,
+    GENL_BP_CMD_REQUEST_BUNDLE,
+    GENL_BP_CMD_REPLY_BUNDLE,
     __GENL_BP_CMD_MAX,
 };
 
@@ -34,9 +34,9 @@ enum genl_bp_cmds
 
 static char *genl_bp_cmds_string[] = {
     "GENL_BP_CMD_UNSPEC",
-    "GENL_BP_CMD_SEND_BUNDLE",
-    "GENL_BP_CMD_BUNDLE_REQUEST",
-    "GENL_BP_CMD_BUNDLE_REPLY",
+    "GENL_BP_CMD_FORWARD_BUNDLE",
+    "GENL_BP_CMD_REQUEST_BUNDLE",
+    "GENL_BP_CMD_REPLY_BUNDLE",
 };
 
 #ifdef __KERNEL__
