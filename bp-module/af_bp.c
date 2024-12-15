@@ -23,7 +23,7 @@ struct bp_sock
 struct proto bp_proto = {
     .name = "BP",
     .owner = THIS_MODULE,
-    .obj_size = sizeof(struct sock),
+    .obj_size = sizeof(struct bp_sock),
 };
 
 static struct sock *bp_alloc_socket(struct net *net, int kern)
@@ -174,11 +174,13 @@ int bp_recvmsg(struct socket *sock, struct msghdr *msg, size_t size, int flags)
 {
     struct sock *sk = sock->sk;
     struct bp_sock *bp = bp_sk(sk);
+    unsigned int agent_id = bp->bp_agent_id;
 
     pr_info("bp_recvmsg: entering function 2.0\n");
 
     lock_sock(sk);
-    pr_info("bp_recvmsg: %d\n", bp->bp_agent_id);
+    pr_info("bp_recvmsg: %d\n", agent_id);
+    // notify_deamon_doit(agent_id, 8443);
     release_sock(sk);
 
     pr_info("bp_recvmsg: exiting function 2.0\n");

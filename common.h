@@ -11,6 +11,7 @@ enum genl_bp_attrs
 {
     GENL_BP_A_UNSPEC,
     GENL_BP_A_SOCKID,
+    GENL_BP_A_AGENT_ID,
     GENL_BP_A_EID,
     GENL_BP_A_PAYLOAD,
     GENL_BP_A_RETURN,
@@ -49,8 +50,8 @@ static const struct nla_policy nla_policy[GENL_BP_A_MAX + 1] = {
 
 struct sockaddr_bp
 {
-    sa_family_t sbp_family;
-    u_int8_t sbp_agent_id;
+    sa_family_t bp_family;
+    u_int8_t bp_agent_id;
 };
 
 #endif

@@ -103,7 +103,7 @@ out:
 	return 0;
 }
 
-int notify_deamon_doit(unsigned long sockid, int port_id)
+int notify_deamon_doit(unsigned int agent_id, int port_id)
 {
 	int ret = 0;
 	void *hdr;
@@ -127,7 +127,7 @@ int notify_deamon_doit(unsigned long sockid, int port_id)
 	}
 
 	/* And the message */
-	if ((ret = nla_put(msg, GENL_BP_A_SOCKID, sizeof(sockid), &sockid)))
+	if ((ret = nla_put(msg, GENL_BP_A_AGENT_ID, sizeof(agent_id), agent_id)))
 	{
 		pr_err("failed to create message string\n");
 		genlmsg_cancel(msg, hdr);
