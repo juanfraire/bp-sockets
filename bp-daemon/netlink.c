@@ -40,6 +40,8 @@
 
 struct thread_args
 {
+	struct nl_sock *netlink_sock;
+	int netlink_family;
 	unsigned int agent_id;
 };
 
@@ -165,6 +167,8 @@ int nl_recvmsg_cb(struct nl_msg *msg, void *arg)
 			return -ENOMEM;
 		}
 		args->agent_id = nla_get_u32(attrs[GENL_BP_A_AGENT_ID]);
+		args->netlink_family = ctx->netlink_family;
+		args->netlink_sock = ctx->netlink_sock;
 
 		if (pthread_create(&thread, NULL, start_bp_recv_agent, args) != 0)
 		{
@@ -188,33 +192,37 @@ int nl_disconnect(struct nl_sock *sock)
 	return 0;
 }
 
-int nl_bundle_reply(tls_daemon_ctx_t *ctx, char *payload)
+int nl_reply_bundle(struct nl_sock *netlink_sock, int netlink_family, char *payload)
 {
 
 	int err = 0;
-	size_t payload_size = strlen(payload) + 1;
-	struct nl_msg *msg = nlmsg_alloc_size(nla_total_size(payload_size));
+	size_t msg_size = NLMSG_SPACE(nla_total_size(strlen(payload) + 1));
+	struct nl_msg *msg = nlmsg_alloc_size(msg_size + GENL_HDRLEN);
 	if (!msg)
 	{
+		log_printf(LOG_ERROR, "Failed to allocate payload\n");
 		return -ENOMEM;
 	}
 
 	/* Put the genl header inside message buffer */
-	void *hdr = genlmsg_put(msg, NL_AUTO_PORT, NL_AUTO_SEQ, ctx->netlink_family, 0, 0, GENL_BP_CMD_REPLY_BUNDLE, GENL_BP_VERSION);
+	void *hdr = genlmsg_put(msg, NL_AUTO_PORT, NL_AUTO_SEQ, netlink_family, 0, 0, GENL_BP_CMD_REPLY_BUNDLE, GENL_BP_VERSION);
 	if (!hdr)
 	{
+		log_printf(LOG_ERROR, "Failed to put the genl header inside message buffer\n");
 		return -EMSGSIZE;
 	}
 
+	log_printf(LOG_INFO, "controlle payload: %s\n", payload);
 	/* Put the string inside the message. */
-	err = nla_put(msg, GENL_BP_A_PAYLOAD, payload_size, payload);
+	err = nla_put_string(msg, GENL_BP_A_PAYLOAD, payload);
 	if (err < 0)
 	{
+		log_printf(LOG_ERROR, "Failed to put the payload attribute\n");
 		return -err;
 	}
 
 	/* Send the message. */
-	err = nl_send_auto(ctx->netlink_sock, msg);
+	err = nl_send_auto(netlink_sock, msg);
 	err = err >= 0 ? 0 : err;
 
 	log_printf(LOG_INFO, "reply send: %s\n", payload);
@@ -227,7 +235,6 @@ void *start_bp_recv_agent(void *arg)
 {
 	struct thread_args *args = (struct thread_args *)arg;
 
-	unsigned int agent_id = args->agent_id;
 	BpSAP txSap;
 	BpDelivery dlv;
 	char *payload;
@@ -239,14 +246,14 @@ void *start_bp_recv_agent(void *arg)
 	int eid_size;
 	int nodeNbr = getOwnNodeNbr();
 
-	eid_size = snprintf(NULL, 0, "ipn:%d.%d", nodeNbr, agent_id) + 1;
+	eid_size = snprintf(NULL, 0, "ipn:%d.%d", nodeNbr, args->agent_id) + 1;
 	eid = malloc(eid_size);
 	if (!eid)
 	{
 		log_printf(LOG_ERROR, "Failed to allocate memory");
 		goto out;
 	}
-	snprintf(eid, eid_size, "ipn:%d.%d", nodeNbr, agent_id);
+	snprintf(eid, eid_size, "ipn:%d.%d", nodeNbr, args->agent_id);
 	log_printf(LOG_INFO, "bp_recv_agent: Agent started with EID: %s\n", eid);
 
 	if (bp_open_source(eid, &txSap, 1) < 0 || txSap == NULL)
@@ -291,6 +298,9 @@ void *start_bp_recv_agent(void *arg)
 		}
 
 		log_printf(LOG_INFO, "PAYLOAD: %s\n", payload);
+		nl_reply_bundle(args->netlink_sock, args->netlink_family, payload);
+		log_printf(LOG_INFO, "PAYLOAD SEND\n");
+
 		free(payload);
 		// netlink_send_and_notify_kernel(&recv_ctx->daemon_ctx, content, len);
 		// if (zco_receive_headers(sdr, &reader, contentLength, (char *)buffer) < 0)
