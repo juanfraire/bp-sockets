@@ -14,7 +14,7 @@ static struct genl_ops genl_ops[] = {
 		.cmd = GENL_BP_CMD_REPLY_BUNDLE,
 		.flags = GENL_ADMIN_PERM,
 		.policy = nla_policy,
-		.doit = recv_bundle_doit,
+		.doit = recv_reply_bundle_doit,
 		.dumpit = NULL,
 	}};
 
@@ -150,7 +150,7 @@ out:
 	return 0;
 }
 
-int recv_bundle_doit(struct sk_buff *skb, struct genl_info *info)
+int recv_reply_bundle_doit(struct sk_buff *skb, struct genl_info *info)
 {
 	/* Check if the attribute is present and print it */
 	if (info->attrs[GENL_BP_A_PAYLOAD])

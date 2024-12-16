@@ -50,13 +50,6 @@
 
 #define HASHMAP_NUM_BUCKETS 100
 
-typedef struct receiver_context
-{
-	BpSAP txSap;	// The SAP handle for the Bundle Protocol
-	BpDelivery dlv; // Delivery struct for received data
-	tls_daemon_ctx_t daemon_ctx;
-} receiver_context_t;
-
 int mainloop(int port)
 {
 	int ret;
@@ -65,8 +58,6 @@ int mainloop(int port)
 	struct event_base *base;
 	struct event *event_on_sigpipe, *event_on_sigint, *event_on_nl_sock;
 	struct nl_sock *netlink_sock;
-	receiver_context_t *recv_ctx;
-	char ownEid[64];
 #ifndef NO_LOG
 	const char *ev_version = event_get_version();
 #endif
@@ -119,27 +110,11 @@ int mainloop(int port)
 		return 1;
 	}
 
+	log_printf(LOG_INFO, "Attach to ION.\n");
 	if (bp_attach() < 0)
 	{
 		log_printf(LOG_ERROR, "Can't attach to BP.\n");
 		/* user inser error handling code */
-		return 1;
-	}
-
-	recv_ctx = malloc(sizeof(receiver_context_t));
-	recv_ctx->daemon_ctx = daemon_ctx;
-
-	isprintf(ownEid, sizeof ownEid, "ipn:%d.1", getOwnNodeNbr());
-	log_printf(LOG_INFO, "ION is running with EID: %s\n", ownEid);
-	if (bp_open(ownEid, &recv_ctx->txSap) < 0)
-	{
-		log_printf(LOG_ERROR, "bptrace can't open own endpoint.\n");
-		/* user's error handling function here */
-		return 1;
-	}
-	if (recv_ctx->txSap == NULL)
-	{
-		log_printf(LOG_ERROR, "can't get Bundle Protocol SAP.");
 		return 1;
 	}
 
@@ -158,7 +133,6 @@ int mainloop(int port)
 	event_free(event_on_sigpipe);
 	event_free(event_on_sigint);
 	event_base_free(base);
-	free(recv_ctx);
 /* This function hushes the wails of memory leak
  * testing utilities, but was not introduced until
  * libevent 2.1
@@ -300,62 +274,6 @@ evutil_socket_t create_server_socket(ev_uint16_t port, int family, int type)
 	}
 
 	return sock;
-}
-
-void bp_receive_cb(evutil_socket_t fd, short events, void *arg)
-{
-	receiver_context_t *recv_ctx = (receiver_context_t *)arg;
-	Sdr sdr = getIonsdr();
-	vast contentLength;
-	vast len;
-	char *content;
-	ZcoReader reader;
-	// netlink
-	struct nlmsghdr *nlh;
-	struct genlmsghdr *gnlh;
-	struct nlattr *attrs[GENL_BP_A_MAX + 1];
-	unsigned long id;
-
-	if (bp_receive(recv_ctx->txSap, &recv_ctx->dlv, BP_BLOCKING) < 0)
-	{
-		log_printf(LOG_ERROR, "bpsink bundle reception failed.\n");
-		/* user code to handle error or timeout*/
-		return;
-	}
-
-	switch (recv_ctx->dlv.result)
-	{
-	case BpPayloadPresent:
-		CHKVOID(sdr_begin_xn(sdr));
-		log_printf(LOG_INFO, "BUNDLE RECEIVE!!\n");
-
-		contentLength = zco_source_data_length(sdr, recv_ctx->dlv.adu);
-		content = malloc((size_t)contentLength);
-
-		zco_start_receiving(recv_ctx->dlv.adu, &reader);
-		len = zco_receive_source(sdr, &reader, contentLength, content);
-
-		if (sdr_end_xn(sdr) < 0 || len < 0)
-		{
-			sdr_exit_xn(sdr);
-			log_printf(LOG_ERROR, "Can't handle delivery. len = %d\n", len);
-			return;
-		}
-
-		log_printf(LOG_INFO, "PAYLOAD: %s\n", content);
-
-		netlink_send_and_notify_kernel(&recv_ctx->daemon_ctx, content, len);
-		// if (zco_receive_headers(sdr, &reader, contentLength, (char *)buffer) < 0)
-		// {
-		// 	sdr_cancel_xn(sdr);
-		// 	log_printf(LOG_ERROR, "can't receive ADU header.\n");
-		// 	MRELEASE(buffer);
-		// 	continue;
-		// }
-
-		bp_release_delivery(&recv_ctx->dlv, 0);
-	}
-	return;
 }
 
 int bp_send_cb(tls_daemon_ctx_t *ctx, char *payload, int payload_size, char *eid, int eid_size)

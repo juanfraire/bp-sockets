@@ -31,6 +31,7 @@
 #include <event2/event.h>
 #include <event2/util.h>
 #include "hashmap.h"
+#include "bp.h"
 
 #define MAX_HOSTNAME 255
 
@@ -68,35 +69,10 @@ typedef struct sock_ctx
 	tls_daemon_ctx_t *daemon;
 } sock_ctx_t;
 
-void bp_receive_cb(evutil_socket_t fd, short events, void *arg);
 int bp_send_cb(tls_daemon_ctx_t *ctx, char *payload, int payload_size, char *eid, int eid_size);
-/* SSA direct functions */
-// static void accept_error_cb(struct evconnlistener *listener, void *ctx);
-// static void accept_cb(struct evconnlistener *listener, evutil_socket_t fd,
-// 	struct sockaddr *address, int socklen, void *ctx);
 void signal_cb(evutil_socket_t fd, short event, void *arg);
 evutil_socket_t create_server_socket(ev_uint16_t port, int family, int protocol);
-
-/* SSA listener functions */
-// static void listener_accept_error_cb(struct evconnlistener *listener, void *ctx);
-// static void listener_accept_cb(struct evconnlistener *listener, evutil_socket_t fd,
-// 	struct sockaddr *address, int socklen, void *arg);
 void free_sock_ctx(sock_ctx_t *sock_ctx);
 int mainloop(int port);
-// void socket_cb(tls_daemon_ctx_t* ctx, unsigned long id, char* comm);
-// void setsockopt_cb(tls_daemon_ctx_t* ctx, unsigned long id, int level,
-// 		int option, void* value, socklen_t len);
-// void getsockopt_cb(tls_daemon_ctx_t* ctx, unsigned long id, int level, int option);
-// void bind_cb(tls_daemon_ctx_t* ctx, unsigned long id, struct sockaddr* int_addr,
-// 	int int_addrlen, struct sockaddr* ext_addr, int ext_addrlen);
-// void connect_cb(tls_daemon_ctx_t* ctx, unsigned long id, struct sockaddr* int_addr,
-// 	int int_addrlen, struct sockaddr* rem_addr, int rem_addrlen, int blocking);
-// void listen_cb(tls_daemon_ctx_t* ctx, unsigned long id, struct sockaddr* int_addr,
-// 	int int_addrlen, struct sockaddr* ext_addr, int ext_addrlen);
-// void associate_cb(tls_daemon_ctx_t* ctx, unsigned long id, struct sockaddr* int_addr,
-// 	       	int int_addrlen);
-// void close_cb(tls_daemon_ctx_t* ctx, unsigned long id);
-// void upgrade_cb(tls_daemon_ctx_t* ctx, unsigned long id, struct sockaddr* int_addr,
-// 	int int_addrlen);
 
 #endif

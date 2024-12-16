@@ -4,6 +4,8 @@
 #include <linux/net.h>
 #include <net/sock.h>
 
+extern struct hlist_head bp_list;
+extern rwlock_t bp_list_lock;
 extern struct proto bp_proto;
 extern const struct net_proto_family bp_family_ops;
 

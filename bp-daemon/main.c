@@ -25,41 +25,18 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #include <errno.h>
-#include <pthread.h>
-#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <wait.h>
 
 #include "daemon.h"
 #include "log.h"
-#include "main.h"
-
-pid_t *workers;
-int worker_count;
-int is_parent;
-
-typedef struct daemon_param
-{
-	int port;
-} daemon_param_t;
 
 int main(int argc, char *argv[])
 {
-	int i;
-	pid_t pid;
-	struct sigaction sigact;
-	int status;
-	int ret;
 	int starting_port = 8443;
-#ifndef NO_LOG
-	long cpus_conf;
-	long cpus_on;
-#endif
 
-	/* Init logger */
 	if (log_init(NULL, LOG_DEBUG))
 	{
 		fprintf(stderr, "Failed to initialize log\n");
@@ -72,95 +49,8 @@ int main(int argc, char *argv[])
 		exit(EXIT_FAILURE);
 	}
 
-#ifndef NO_LOG
-	cpus_on = sysconf(_SC_NPROCESSORS_ONLN);
-	cpus_conf = sysconf(_SC_NPROCESSORS_CONF);
-	log_printf(LOG_INFO, "Detected %ld/%ld active CPUs\n", cpus_on, cpus_conf);
-#endif
-
-	memset(&sigact, 0, sizeof(sigact));
-	sigact.sa_handler = sig_handler;
-	sigaction(SIGINT, &sigact, NULL);
-
-	worker_count = 1;
-
-	workers = malloc(sizeof(pid_t) * worker_count);
-	if (workers == NULL)
-	{
-		log_printf(LOG_ERROR, "Failed to malloc space for workers\n");
-		exit(EXIT_FAILURE);
-	}
-	for (i = 0; i < worker_count; i++)
-	{
-		pid = fork();
-		if (pid == -1)
-		{
-			log_printf(LOG_ERROR, "%s", strerror(errno));
-			exit(EXIT_FAILURE);
-		}
-		if (pid == 0)
-		{
-			mainloop(starting_port + i);
-			free(workers);
-			return 0;
-		}
-		else
-		{
-			workers[i] = pid;
-			is_parent = 1;
-		}
-	}
-
-	while ((ret = wait(&status)) > 0)
-	{
-		if (ret == -1)
-		{
-			log_printf(LOG_ERROR, "Failed in waitpid %s\n", strerror(errno));
-			exit(EXIT_FAILURE);
-		}
-		if (WIFEXITED(status))
-		{
-			log_printf(LOG_INFO, "worker exited, status %d\n", WEXITSTATUS(status));
-		}
-		else if (WIFSIGNALED(status))
-		{
-			log_printf(LOG_INFO, "worker killed by signal %d\n", WTERMSIG(status));
-		}
-		else if (WIFSTOPPED(status))
-		{
-			log_printf(LOG_INFO, "worker stopped by signal %d\n", WSTOPSIG(status));
-		}
-		else if (WIFCONTINUED(status))
-		{
-			log_printf(LOG_INFO, "worker continued\n");
-		}
-	}
-
-	/*pthread_join(csr_daemon, NULL);
-	pthread_join(auth_daemon, NULL);*/
+	mainloop(starting_port);
 
 	log_close();
-	free(workers);
 	return 0;
-}
-
-void sig_handler(int signum)
-{
-	int i;
-	if (signum == SIGINT)
-	{
-		if (is_parent == 1)
-		{
-			for (i = 0; i < worker_count; i++)
-			{
-				kill(workers[i], SIGINT);
-			}
-		}
-		else
-		{
-			free(workers);
-			_exit(0);
-		}
-	}
-	return;
 }

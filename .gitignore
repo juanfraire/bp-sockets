@@ -55,6 +55,7 @@ dkms.conf
 *.rc
 *.cfg
 
+.vscode
 bp-daemon/bp_daemon
 ion.log
 demo-app-bp-send

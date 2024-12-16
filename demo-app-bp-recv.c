@@ -38,7 +38,7 @@ int main(int argc, char *argv[])
     printf("Socket created.\n");
 
     addr_bp.bp_family = AF_BP;
-    addr_bp.bp_agent_id = 16;
+    addr_bp.bp_agent_id = 1;
     if (bind(sfd, (struct sockaddr *)&addr_bp, sizeof(addr_bp)) == -1)
     {
         perror("bind sockaddr_bp failed");

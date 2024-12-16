@@ -35,9 +35,16 @@
 #include "netlink.h"
 #include "daemon.h"
 #include "log.h"
+#include "bp.h"
 #include "../common.h"
 
-struct nl_sock *nl_connect_and_configure(tls_daemon_ctx_t *ctx)
+struct thread_args
+{
+	unsigned int agent_id;
+};
+
+struct nl_sock *
+nl_connect_and_configure(tls_daemon_ctx_t *ctx)
 {
 	int mcgrp, fam, ret;
 	struct nl_sock *sk;
@@ -102,8 +109,6 @@ int nl_recvmsg_cb(struct nl_msg *msg, void *arg)
 	int payload_size, eid_size;
 	unsigned long sockid;
 
-	log_printf(LOG_INFO, "Netlink recvmsg command: %s\n", genl_bp_cmds_string[genlhdr->cmd]);
-
 	/* Parse the attributes */
 	err = nla_parse(attrs, GENL_BP_A_MAX, genlmsg_attrdata(genlhdr, 0), genlmsg_attrlen(genlhdr, 0), NULL);
 	if (err)
@@ -114,7 +119,7 @@ int nl_recvmsg_cb(struct nl_msg *msg, void *arg)
 
 	switch (genlhdr->cmd)
 	{
-	case GENL_BP_CMD_SEND_BUNDLE:
+	case GENL_BP_CMD_FORWARD_BUNDLE:
 		if (!attrs[GENL_BP_A_SOCKID])
 		{
 			log_printf(LOG_ERROR, "attribute missing from message\n");
@@ -144,8 +149,32 @@ int nl_recvmsg_cb(struct nl_msg *msg, void *arg)
 
 		bp_send_cb(ctx, payload, payload_size, eid, eid_size);
 		break;
-	case GENL_BP_CMD_RECV_BUNDLE:
+	case GENL_BP_CMD_REQUEST_BUNDLE:
+		pthread_t thread;
 
+		if (!attrs[GENL_BP_A_AGENT_ID])
+		{
+			log_printf(LOG_ERROR, "attribute missing from message\n");
+			return NL_SKIP;
+		}
+
+		struct thread_args *args = malloc(sizeof(struct thread_args));
+		if (!args)
+		{
+			log_printf(LOG_ERROR, "failed to allocate memory for thread arguments\n");
+			return -ENOMEM;
+		}
+		args->agent_id = nla_get_u32(attrs[GENL_BP_A_AGENT_ID]);
+
+		if (pthread_create(&thread, NULL, start_bp_recv_agent, args) != 0)
+		{
+			fprintf(stderr, "Failed to create thread\n");
+			free(args);
+			return -1;
+		}
+		pthread_detach(thread);
+
+		break;
 	default:
 		log_printf(LOG_ERROR, "unrecognized command\n");
 		break;
@@ -159,109 +188,132 @@ int nl_disconnect(struct nl_sock *sock)
 	return 0;
 }
 
-void netlink_notify_kernel(tls_daemon_ctx_t *ctx, unsigned long id, int response)
+int nl_bundle_reply(tls_daemon_ctx_t *ctx, char *payload)
 {
-	int ret;
-	struct nl_msg *msg;
-	void *msg_head;
-	int msg_size = NLMSG_HDRLEN + GENL_HDRLEN +
-				   nla_total_size(sizeof(id)) + nla_total_size(sizeof(response));
-	msg = nlmsg_alloc_size(msg_size);
-	if (msg == NULL)
+
+	int err = 0;
+	size_t payload_size = strlen(payload) + 1;
+	struct nl_msg *msg = nlmsg_alloc_size(nla_total_size(payload_size));
+	if (!msg)
 	{
-		log_printf(LOG_ERROR, "Failed to allocate message buffer\n");
-		return;
+		return -ENOMEM;
 	}
-	msg_head = genlmsg_put(msg, NL_AUTO_PID, NL_AUTO_SEQ, ctx->netlink_family, 0, 0, GENL_BP_CMD_RETURN, 1);
-	if (msg_head == NULL)
+
+	/* Put the genl header inside message buffer */
+	void *hdr = genlmsg_put(msg, NL_AUTO_PORT, NL_AUTO_SEQ, ctx->netlink_family, 0, 0, GENL_BP_CMD_REPLY_BUNDLE, GENL_BP_VERSION);
+	if (!hdr)
 	{
-		log_printf(LOG_ERROR, "Failed in genlmsg_put\n");
-		return;
+		return -EMSGSIZE;
 	}
-	ret = nla_put_u64(msg, GENL_BP_A_SOCKID, id);
-	if (ret != 0)
+
+	/* Put the string inside the message. */
+	err = nla_put(msg, GENL_BP_A_PAYLOAD, payload_size, payload);
+	if (err < 0)
 	{
-		log_printf(LOG_ERROR, "Failed to insert ID in netlink msg\n");
-		return;
+		return -err;
 	}
-	ret = nla_put_u32(msg, GENL_BP_A_RETURN, response);
-	if (ret != 0)
-	{
-		log_printf(LOG_ERROR, "Failed to insert response in netlink msg\n");
-		return;
-	}
-	ret = nl_send_auto(ctx->netlink_sock, msg);
-	if (ret < 0)
-	{
-		log_printf(LOG_ERROR, "Failed to send netlink msg\n");
-		return;
-	}
-	// log_printf(LOG_INFO, "Sent msg to kernel\n");
+
+	/* Send the message. */
+	err = nl_send_auto(ctx->netlink_sock, msg);
+	err = err >= 0 ? 0 : err;
+
+	log_printf(LOG_INFO, "reply send: %s\n", payload);
 	nlmsg_free(msg);
-	return;
+
+	return err;
 }
 
-void netlink_send_and_notify_kernel(tls_daemon_ctx_t *ctx, char *data, unsigned int len)
+void *start_bp_recv_agent(void *arg)
 {
-	int ret;
-	struct nl_msg *msg;
-	void *msg_head;
-	struct nlattr *attrs[GENL_BP_A_MAX + 1];
+	struct thread_args *args = (struct thread_args *)arg;
 
-	unsigned long id = nla_get_u64(attrs[GENL_BP_A_SOCKID]);
-	log_printf(LOG_INFO, "MESSAGE: %s, LENGTH: %d", data, len);
+	unsigned int agent_id = args->agent_id;
+	BpSAP txSap;
+	BpDelivery dlv;
+	char *payload;
+	int payload_size;
+	Sdr sdr = getIonsdr();
+	vast len;
+	ZcoReader reader;
+	char *eid;
+	int eid_size;
+	int nodeNbr = getOwnNodeNbr();
 
-	// Calculate message size
-	int msg_size = NLMSG_HDRLEN + GENL_HDRLEN +
-				   nla_total_size(sizeof(id)) + nla_total_size(len);
-
-	// Allocate message
-	msg = nlmsg_alloc_size(msg_size);
-	if (msg == NULL)
+	eid_size = snprintf(NULL, 0, "ipn:%d.%d", nodeNbr, agent_id) + 1;
+	eid = malloc(eid_size);
+	if (!eid)
 	{
-		log_printf(LOG_ERROR, "Failed to allocate Netlink message buffer.\n");
-		return;
+		log_printf(LOG_ERROR, "Failed to allocate memory");
+		goto out;
+	}
+	snprintf(eid, eid_size, "ipn:%d.%d", nodeNbr, agent_id);
+	log_printf(LOG_INFO, "bp_recv_agent: Agent started with EID: %s\n", eid);
+
+	if (bp_open_source(eid, &txSap, 1) < 0 || txSap == NULL)
+	{
+		log_printf(LOG_ERROR, "Failed to open source endpoint.\n");
+		goto out;
+	}
+	if (bp_open(eid, &txSap) < 0 || txSap == NULL)
+	{
+		log_printf(LOG_ERROR, "Failed to open source endpoint.\n");
+		goto out;
 	}
 
-	// Construct the Generic Netlink message header
-	msg_head = genlmsg_put(msg, NL_AUTO_PID, NL_AUTO_SEQ, ctx->netlink_family, 0, 0, GENL_BP_CMD_RETURN, 1);
-	if (msg_head == NULL)
+	if (bp_receive(txSap, &dlv, BP_BLOCKING) < 0)
 	{
-		log_printf(LOG_ERROR, "Failed in genlmsg_put.\n");
-		nlmsg_free(msg);
-		return;
+		log_printf(LOG_ERROR, "Bundle reception failed.\n");
+		goto out;
 	}
 
-	// Add the ID attribute
-	ret = nla_put_u64(msg, GENL_BP_A_SOCKID, id);
-	if (ret != 0)
+	switch (dlv.result)
 	{
-		log_printf(LOG_ERROR, "Failed to add ID attribute to Netlink message.\n");
-		nlmsg_free(msg);
-		return;
+	case BpPayloadPresent:
+		CHKVOID(sdr_begin_xn(sdr));
+		payload_size = zco_source_data_length(sdr, dlv.adu);
+		payload = malloc((size_t)payload_size);
+		if (!payload)
+		{
+			log_printf(LOG_ERROR, "Failed to allocate memory for payload.\n");
+			sdr_exit_xn(sdr);
+			goto out;
+		}
+
+		zco_start_receiving(dlv.adu, &reader);
+		len = zco_receive_source(sdr, &reader, payload_size, payload);
+
+		if (sdr_end_xn(sdr) < 0 || len < 0)
+		{
+			sdr_exit_xn(sdr);
+			log_printf(LOG_ERROR, "Can't handle delivery. len = %d\n", len);
+			free(payload);
+			goto out;
+		}
+
+		log_printf(LOG_INFO, "PAYLOAD: %s\n", payload);
+		free(payload);
+		// netlink_send_and_notify_kernel(&recv_ctx->daemon_ctx, content, len);
+		// if (zco_receive_headers(sdr, &reader, contentLength, (char *)buffer) < 0)
+		// {
+		// 	sdr_cancel_xn(sdr);
+		// 	log_printf(LOG_ERROR, "can't receive ADU header.\n");
+		// 	MRELEASE(buffer);
+		// 	continue;
+		// }
+
+		// bp_release();
+		break;
+	default:
+		log_printf(LOG_INFO, "No Bp Payload\n");
+		break;
 	}
 
-	// Add the data attribute
-	ret = nla_put(msg, GENL_BP_A_PAYLOAD, len, data);
-	if (ret != 0)
-	{
-		log_printf(LOG_ERROR, "Failed to add data attribute to Netlink message.\n");
-		nlmsg_free(msg);
-		return;
-	}
+	// bp_release_delivery(&dlv, 0);
+out:
+	log_printf(LOG_INFO, "bp_recv_agent: Agent terminated with EID: %s\n", eid);
 
-	// Send the message
-	ret = nl_send_auto(ctx->netlink_sock, msg);
-	if (ret < 0)
-	{
-		log_printf(LOG_ERROR, "Failed to send Netlink message (error %d).\n", ret);
-		nlmsg_free(msg);
-		return;
-	}
-
-	log_printf(LOG_INFO, "Successfully sent data message to kernel.\n");
-
-	// Free the message
-	nlmsg_free(msg);
-	return;
+	bp_close(txSap);
+	free(eid);
+	free(args);
+	return NULL;
 }

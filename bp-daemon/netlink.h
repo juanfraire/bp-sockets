@@ -33,8 +33,7 @@ struct nl_sock *nl_connect_and_configure(tls_daemon_ctx_t *ctx);
 int nl_disconnect(struct nl_sock *sock);
 void nl_recvmsg(evutil_socket_t fd, short events, void *arg);
 int nl_recvmsg_cb(struct nl_msg *msg, void *arg);
-void netlink_notify_kernel(tls_daemon_ctx_t *ctx, unsigned long id, int response);
-void netlink_send_and_notify_kernel(tls_daemon_ctx_t *ctx, char *data, unsigned int len);
-// void netlink_handshake_notify_kernel(tls_daemon_ctx_t* ctx, unsigned long id, int response);
+int nl_bundle_reply(tls_daemon_ctx_t *ctx, char *payload);
+void *start_bp_recv_agent(void *arg);
 
 #endif
