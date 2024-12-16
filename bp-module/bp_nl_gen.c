@@ -1,6 +1,7 @@
 #include <net/genetlink.h>
 #include "../common.h"
 #include "bp_nl_gen.h"
+#include "af_bp.h"
 
 static struct genl_ops genl_ops[] = {
 	// {
@@ -33,7 +34,6 @@ struct genl_family genl_fam = {
 	.n_ops = ARRAY_SIZE(genl_ops),
 	.mcgrps = genl_mcgrps,
 	.n_mcgrps = ARRAY_SIZE(genl_mcgrps),
-	// .hdrsize = 0,
 };
 
 int fail_doit(struct sk_buff *skb, struct genl_info *info)
@@ -152,16 +152,55 @@ out:
 
 int recv_reply_bundle_doit(struct sk_buff *skb, struct genl_info *info)
 {
-	/* Check if the attribute is present and print it */
-	if (info->attrs[GENL_BP_A_PAYLOAD])
+	struct sock *sk;
+	struct bp_sock *bp;
+	u32 agent_id;
+	char *payload;
+	size_t payload_len;
+	struct sk_buff *new_skb;
+
+	pr_info("TRIGGER: received message\n");
+
+	if (!info->attrs[GENL_BP_A_AGENT_ID])
 	{
-		char *str = nla_data(info->attrs[GENL_BP_A_PAYLOAD]);
-		pr_info("message received: %s\n", str);
+		pr_err("attribute missing from message\n");
+		return -EINVAL;
 	}
-	else
+	agent_id = nla_get_u32(info->attrs[GENL_BP_A_AGENT_ID]);
+
+	if (!info->attrs[GENL_BP_A_PAYLOAD])
 	{
-		pr_info("empty message received\n");
+		pr_err("empty message received\n");
+		return -EINVAL;
 	}
+	payload = nla_data(info->attrs[GENL_BP_A_PAYLOAD]);
+	payload_len = nla_len(info->attrs[GENL_BP_A_PAYLOAD]);
+
+	pr_info("Message for agent %d: %s\n", agent_id, payload);
+
+	new_skb = alloc_skb(payload_len, GFP_KERNEL);
+	if (!new_skb)
+	{
+		pr_err("Failed to allocate sk_buff for payload\n");
+		return -ENOMEM;
+	}
+	skb_put_data(new_skb, payload, payload_len);
+
+	read_lock_bh(&bp_list_lock);
+	sk_for_each(sk, &bp_list)
+	{
+		bp = bp_sk(sk);
+
+		if (bp->bp_agent_id == agent_id)
+		{
+
+			skb_queue_tail(&bp->queue, new_skb);
+			wake_up_interruptible(&bp->wait_queue);
+			pr_info("Payload queued successfully for agent: %d\n", bp->bp_agent_id);
+			break;
+		}
+	}
+	read_unlock_bh(&bp_list_lock);
 
 	return 0;
 }

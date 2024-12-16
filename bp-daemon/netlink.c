@@ -192,11 +192,11 @@ int nl_disconnect(struct nl_sock *sock)
 	return 0;
 }
 
-int nl_reply_bundle(struct nl_sock *netlink_sock, int netlink_family, char *payload)
+int nl_reply_bundle(struct nl_sock *netlink_sock, int netlink_family, unsigned int agent_id, char *payload)
 {
 
 	int err = 0;
-	size_t msg_size = NLMSG_SPACE(nla_total_size(strlen(payload) + 1));
+	size_t msg_size = NLMSG_SPACE(nla_total_size(strlen(payload) + 1) + nla_total_size(sizeof(unsigned int)));
 	struct nl_msg *msg = nlmsg_alloc_size(msg_size + GENL_HDRLEN);
 	if (!msg)
 	{
@@ -212,8 +212,13 @@ int nl_reply_bundle(struct nl_sock *netlink_sock, int netlink_family, char *payl
 		return -EMSGSIZE;
 	}
 
-	log_printf(LOG_INFO, "controlle payload: %s\n", payload);
 	/* Put the string inside the message. */
+	err = nla_put_u32(msg, GENL_BP_A_AGENT_ID, agent_id);
+	if (err < 0)
+	{
+		log_printf(LOG_ERROR, "Failed to put the agent_id attribute\n");
+		return -err;
+	}
 	err = nla_put_string(msg, GENL_BP_A_PAYLOAD, payload);
 	if (err < 0)
 	{
@@ -225,7 +230,6 @@ int nl_reply_bundle(struct nl_sock *netlink_sock, int netlink_family, char *payl
 	err = nl_send_auto(netlink_sock, msg);
 	err = err >= 0 ? 0 : err;
 
-	log_printf(LOG_INFO, "reply send: %s\n", payload);
 	nlmsg_free(msg);
 
 	return err;
@@ -256,11 +260,6 @@ void *start_bp_recv_agent(void *arg)
 	snprintf(eid, eid_size, "ipn:%d.%d", nodeNbr, args->agent_id);
 	log_printf(LOG_INFO, "bp_recv_agent: Agent started with EID: %s\n", eid);
 
-	if (bp_open_source(eid, &txSap, 1) < 0 || txSap == NULL)
-	{
-		log_printf(LOG_ERROR, "Failed to open source endpoint.\n");
-		goto out;
-	}
 	if (bp_open(eid, &txSap) < 0 || txSap == NULL)
 	{
 		log_printf(LOG_ERROR, "Failed to open source endpoint.\n");
@@ -297,28 +296,20 @@ void *start_bp_recv_agent(void *arg)
 			goto out;
 		}
 
-		log_printf(LOG_INFO, "PAYLOAD: %s\n", payload);
-		nl_reply_bundle(args->netlink_sock, args->netlink_family, payload);
-		log_printf(LOG_INFO, "PAYLOAD SEND\n");
+		log_printf(LOG_INFO, "bp_recv_agent: receive bundle\n");
+
+		nl_reply_bundle(args->netlink_sock, args->netlink_family, args->agent_id, payload);
+
+		log_printf(LOG_INFO, "bp_recv_agent: sending reply bundle to kernel\n");
 
 		free(payload);
-		// netlink_send_and_notify_kernel(&recv_ctx->daemon_ctx, content, len);
-		// if (zco_receive_headers(sdr, &reader, contentLength, (char *)buffer) < 0)
-		// {
-		// 	sdr_cancel_xn(sdr);
-		// 	log_printf(LOG_ERROR, "can't receive ADU header.\n");
-		// 	MRELEASE(buffer);
-		// 	continue;
-		// }
-
-		// bp_release();
 		break;
 	default:
 		log_printf(LOG_INFO, "No Bp Payload\n");
 		break;
 	}
 
-	// bp_release_delivery(&dlv, 0);
+	bp_release_delivery(&dlv, 0);
 out:
 	log_printf(LOG_INFO, "bp_recv_agent: Agent terminated with EID: %s\n", eid);
 

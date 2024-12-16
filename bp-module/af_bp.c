@@ -5,20 +5,8 @@
 #include "bp_nl_gen.h"
 #include "../common.h"
 
-#define bp_sk(ptr) container_of(ptr, struct bp_sock, sk)
-
 HLIST_HEAD(bp_list);
 DEFINE_RWLOCK(bp_list_lock);
-
-struct bp_sock
-{
-    struct sock sk;
-    u_int8_t bp_agent_id;
-    struct sk_buff_head ack_queue;
-    struct sk_buff_head fragment_queue;
-    struct sk_buff_head interrupt_in_queue;
-    struct sk_buff_head interrupt_out_queue;
-};
 
 struct proto bp_proto = {
     .name = "BP",
@@ -37,10 +25,9 @@ static struct sock *bp_alloc_socket(struct net *net, int kern)
     sock_init_data(NULL, sk);
 
     bp = bp_sk(sk);
-    skb_queue_head_init(&bp->ack_queue);
-    skb_queue_head_init(&bp->fragment_queue);
-    skb_queue_head_init(&bp->interrupt_in_queue);
-    skb_queue_head_init(&bp->interrupt_out_queue);
+    skb_queue_head_init(&bp->queue);
+    init_waitqueue_head(&bp->wait_queue);
+
 out:
     return sk;
 }
@@ -85,7 +72,6 @@ int bp_create(struct net *net, struct socket *sock, int protocol, int kern)
         goto out;
 
     bp = bp_sk(sk);
-
     sock_init_data(sock, sk);
 
     sock->ops = &bp_proto_ops;
@@ -98,7 +84,8 @@ out:
 
 int bp_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 {
-    struct sock *sk = sock->sk;
+    struct sock *iter_sk, *sk = sock->sk;
+    struct bp_sock *iter_bp, *bp;
     struct sockaddr_bp *addr = (struct sockaddr_bp *)uaddr;
     int rc = 0;
 
@@ -109,13 +96,31 @@ int bp_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
         goto out;
     }
 
+    read_lock_bh(&bp_list_lock);
+    sk_for_each(iter_sk, &bp_list)
+    {
+        iter_bp = bp_sk(iter_sk);
+        if (iter_bp->bp_agent_id == addr->bp_agent_id)
+        {
+            rc = -EADDRINUSE;
+            pr_err("bp_bind: agent %d already bound\n", addr->bp_agent_id);
+            goto unlock;
+        }
+    }
+    read_unlock_bh(&bp_list_lock);
+
+    bp = bp_sk(sk);
+
     lock_sock(sk);
-    bp_sk(sk)->bp_agent_id = addr->bp_agent_id;
+    // Bind the socket to the agent ID
+    bp->bp_agent_id = addr->bp_agent_id;
     write_lock_bh(&bp_list_lock);
     sk_add_node(sk, &bp_list);
     write_unlock_bh(&bp_list_lock);
+
+    pr_info("bp_bind: socket bound to agent %d\n", addr->bp_agent_id);
+unlock:
     release_sock(sk);
-    net_dbg_ratelimited("bp_bind: socket is bound\n");
 out:
     return rc;
 }
@@ -123,9 +128,20 @@ out:
 int bp_release(struct socket *sock)
 {
     struct sock *sk = sock->sk;
+    struct bp_sock *bp = bp_sk(sk);
+
     if (!sk)
         return 0;
+
+    write_lock_bh(&bp_list_lock);
+    sk_del_node_init(sk);
+    write_unlock_bh(&bp_list_lock);
+
+    skb_queue_purge(&bp->queue);
+
     sock_hold(sk);
+    sock_orphan(sk);
+    release_sock(sk);
     sock_put(sk);
     return 0;
 }
@@ -175,16 +191,53 @@ int bp_recvmsg(struct socket *sock, struct msghdr *msg, size_t size, int flags)
     struct sock *sk = sock->sk;
     struct bp_sock *bp = bp_sk(sk);
     u32 agent_id = bp->bp_agent_id;
+    struct sk_buff *skb;
     int ret;
 
     pr_info("bp_recvmsg: entering function 2.0\n");
+    notify_deamon_doit(bp->bp_agent_id, 8443);
 
     lock_sock(sk);
-    pr_info("bp_recvmsg: %d\n", agent_id);
-    notify_deamon_doit(agent_id, 8443);
+    ret = wait_event_interruptible(bp->wait_queue, !skb_queue_empty(&bp->queue));
+    if (ret < 0)
+    {
+        pr_err("bp_recvmsg: interrupted while waiting\n");
+        release_sock(sk);
+        return ret;
+    }
+
+    skb = skb_dequeue(&bp->queue);
+    if (!skb)
+    {
+        pr_info("bp_recvmsg: no messages in the queue for agent %d\n", agent_id);
+        ret = -EAGAIN;
+        goto out_unlock;
+    }
+
+    pr_info("bp_recvmsg: message dequeued for agent %d\n", agent_id);
+
+    if (skb->len > size)
+    {
+        pr_err("bp_recvmsg: buffer too small for message (required: %u, provided: %zu)\n",
+               skb->len, size);
+        ret = -EMSGSIZE;
+        goto out_free_skb;
+    }
+
+    if (copy_to_user(msg->msg_iter.iov->iov_base, skb->data, skb->len))
+    {
+        pr_err("bp_recvmsg: failed to copy data to user space\n");
+        ret = -EFAULT;
+        goto out_free_skb;
+    }
+
+    ret = skb->len;
+
+out_free_skb:
+    kfree_skb(skb);
+out_unlock:
     release_sock(sk);
 
-    pr_info("bp_recvmsg: exiting function 2.0\n");
-
-    return 0;
+    pr_info("bp_recvmsg: exiting function\n");
+    return ret;
 }

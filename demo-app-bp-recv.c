@@ -24,7 +24,14 @@ int main(int argc, char *argv[])
     struct sockaddr_bp addr_bp;
     char buffer[80];
     struct iovec iov[1];
-    struct msghdr *msg = (struct msghdr *)malloc(sizeof(struct msghdr));
+    struct msghdr *msg;
+    unsigned int agent_id;
+
+    if (argc < 2)
+    {
+        printf("Usage: %s <agent_id>\n", argv[0]);
+        return EXIT_FAILURE;
+    }
 
     signal(SIGINT, handle_sigint);
 
@@ -37,14 +44,16 @@ int main(int argc, char *argv[])
     }
     printf("Socket created.\n");
 
+    agent_id = atoi(argv[1]);
     addr_bp.bp_family = AF_BP;
-    addr_bp.bp_agent_id = 1;
+    addr_bp.bp_agent_id = agent_id;
     if (bind(sfd, (struct sockaddr *)&addr_bp, sizeof(addr_bp)) == -1)
     {
-        perror("bind sockaddr_bp failed");
+        perror("Failed to bind socket");
         return EXIT_FAILURE;
     }
 
+    msg = (struct msghdr *)malloc(sizeof(struct msghdr));
     memset(iov, 0, sizeof(iov));
     iov[0].iov_base = buffer;
     iov[0].iov_len = sizeof(buffer);
@@ -52,17 +61,17 @@ int main(int argc, char *argv[])
     msg->msg_iov = iov;
     msg->msg_iovlen = 1;
 
-    printf("Waiting on recvmsg...\n");
+    printf("Listening for incoming messages...\n");
     int ret = recvmsg(sfd, msg, 0);
     if (ret < 0)
     {
-        perror("recvmsg() failed");
+        perror("Failed to receive message");
         close(sfd);
         return EXIT_FAILURE;
     }
     else
     {
-        printf("Received message: %s\n", buffer);
+        printf("Message received: %s\n", buffer);
     }
 
     // Cleanup
