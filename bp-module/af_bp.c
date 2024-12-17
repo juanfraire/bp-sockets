@@ -167,6 +167,7 @@ int bp_sendmsg(struct socket *sock, struct msghdr *msg, size_t size)
     void *payload;
     int eid_size;
     u32 sockid;
+    int ret = 0;
 
     addr = (struct sockaddr *)msg->msg_name;
     eid = addr->sa_data;
@@ -178,26 +179,26 @@ int bp_sendmsg(struct socket *sock, struct msghdr *msg, size_t size)
     if (!payload)
     {
         pr_err("bp_sendmsg: failed to allocate memory\n");
-        return -ENOMEM;
+        ret = -ENOMEM;
+        goto out;
     }
     if (copy_from_iter((void *)payload, size, &msg->msg_iter) != size)
     {
         pr_err("bp_sendmsg: failed to copy data from user\n");
         kfree(payload);
-        return -EFAULT;
+        ret = -EFAULT;
+        goto clean;
     }
-
-    // Get the sockaddr from the msghdr
-    pr_info("[size=%d] eid: %s\n", eid_size, eid);
-    pr_info("[size=%zu] payload: %s\n", size, (char *)payload);
 
     sockid = (u32)sock->sk->sk_socket;
     send_bundle_doit(sockid, (char *)payload, size, eid, eid_size, 8443);
 
+clean:
     kfree(payload);
+out:
     pr_info("bp_sendmsg: exiting function 2.0\n");
 
-    return 0;
+    return ret;
 }
 
 int bp_recvmsg(struct socket *sock, struct msghdr *msg, size_t size, int flags)

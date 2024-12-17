@@ -101,7 +101,7 @@ int send_bundle_doit(u64 sockid, char *payload, int payload_size, char *eid, int
 	}
 
 out:
-	return 0;
+	return ret;
 }
 
 int notify_deamon_doit(u32 agent_id, int port_id)
@@ -147,7 +147,7 @@ int notify_deamon_doit(u32 agent_id, int port_id)
 	}
 
 out:
-	return 0;
+	return ret;
 }
 
 int recv_reply_bundle_doit(struct sk_buff *skb, struct genl_info *info)
