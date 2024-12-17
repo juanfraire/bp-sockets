@@ -26,6 +26,7 @@ int main(int argc, char *argv[])
     struct iovec iov[1];
     struct msghdr *msg;
     unsigned int agent_id;
+    int ret = 0;
 
     if (argc < 2)
     {
@@ -50,7 +51,8 @@ int main(int argc, char *argv[])
     if (bind(sfd, (struct sockaddr *)&addr_bp, sizeof(addr_bp)) == -1)
     {
         perror("Failed to bind socket");
-        return EXIT_FAILURE;
+        ret = EXIT_FAILURE;
+        goto out;
     }
 
     msg = (struct msghdr *)malloc(sizeof(struct msghdr));
@@ -62,22 +64,21 @@ int main(int argc, char *argv[])
     msg->msg_iovlen = 1;
 
     printf("Listening for incoming messages...\n");
-    int ret = recvmsg(sfd, msg, 0);
-    if (ret < 0)
+    if (recvmsg(sfd, msg, 0) < 0)
     {
         perror("Failed to receive message");
-        close(sfd);
-        return EXIT_FAILURE;
+        ret = EXIT_FAILURE;
+        goto out;
     }
     else
     {
         printf("Message received: %s\n", buffer);
     }
 
-    // Cleanup
+out:
     free(msg);
     close(sfd);
     printf("Socket closed.\n");
 
-    return EXIT_SUCCESS;
+    return ret;
 }

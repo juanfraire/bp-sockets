@@ -89,9 +89,22 @@ int bp_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
     struct sockaddr_bp *addr = (struct sockaddr_bp *)uaddr;
     int rc = 0;
 
-    if (addr_len < sizeof(struct sockaddr_bp) ||
-        addr->bp_family != AF_BP || addr->bp_agent_id < 1)
+    if (addr_len < sizeof(struct sockaddr_bp))
     {
+        pr_err("bp_bind: address length too short (expected: %zu, provided: %d)\n",
+               sizeof(struct sockaddr_bp), addr_len);
+        rc = -EINVAL;
+        goto out;
+    }
+    if (addr->bp_family != AF_BP)
+    {
+        pr_err("bp_bind: unsupported address family %d\n", addr->bp_family);
+        rc = -EAFNOSUPPORT;
+        goto out;
+    }
+    if (addr->bp_agent_id < 1)
+    {
+        pr_err("bp_bind: invalid agent ID %d (must be >= 1)\n", addr->bp_agent_id);
         rc = -EINVAL;
         goto out;
     }
@@ -104,7 +117,8 @@ int bp_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
         {
             rc = -EADDRINUSE;
             pr_err("bp_bind: agent %d already bound\n", addr->bp_agent_id);
-            goto unlock;
+            read_unlock_bh(&bp_list_lock);
+            goto out;
         }
     }
     read_unlock_bh(&bp_list_lock);
@@ -112,15 +126,13 @@ int bp_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
     bp = bp_sk(sk);
 
     lock_sock(sk);
-    // Bind the socket to the agent ID
     bp->bp_agent_id = addr->bp_agent_id;
     write_lock_bh(&bp_list_lock);
     sk_add_node(sk, &bp_list);
     write_unlock_bh(&bp_list_lock);
+    release_sock(sk);
 
     pr_info("bp_bind: socket bound to agent %d\n", addr->bp_agent_id);
-unlock:
-    release_sock(sk);
 out:
     return rc;
 }
@@ -140,9 +152,11 @@ int bp_release(struct socket *sock)
     skb_queue_purge(&bp->queue);
 
     sock_hold(sk);
+    lock_sock(sk);
     sock_orphan(sk);
     release_sock(sk);
     sock_put(sk);
+
     return 0;
 }
 
@@ -197,13 +211,19 @@ int bp_recvmsg(struct socket *sock, struct msghdr *msg, size_t size, int flags)
     pr_info("bp_recvmsg: entering function 2.0\n");
     notify_deamon_doit(bp->bp_agent_id, 8443);
 
+    sock_hold(sk);
     lock_sock(sk);
     ret = wait_event_interruptible(bp->wait_queue, !skb_queue_empty(&bp->queue));
     if (ret < 0)
     {
         pr_err("bp_recvmsg: interrupted while waiting\n");
-        release_sock(sk);
-        return ret;
+        goto out_unlock;
+    }
+    if (sock_flag(sk, SOCK_DEAD))
+    {
+        pr_err("bp_recvmsg: socket closed while waiting\n");
+        ret = -ECONNRESET;
+        goto out_unlock;
     }
 
     skb = skb_dequeue(&bp->queue);
@@ -237,7 +257,9 @@ out_free_skb:
     kfree_skb(skb);
 out_unlock:
     release_sock(sk);
+    sock_put(sk);
 
     pr_info("bp_recvmsg: exiting function\n");
+
     return ret;
 }
