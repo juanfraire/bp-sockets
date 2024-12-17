@@ -111,7 +111,6 @@ int nl_recvmsg_cb(struct nl_msg *msg, void *arg)
 	int payload_size, eid_size;
 	unsigned long sockid;
 
-	/* Parse the attributes */
 	err = nla_parse(attrs, GENL_BP_A_MAX, genlmsg_attrdata(genlhdr, 0), genlmsg_attrlen(genlhdr, 0), NULL);
 	if (err)
 	{
@@ -145,9 +144,6 @@ int nl_recvmsg_cb(struct nl_msg *msg, void *arg)
 		}
 		eid = nla_get_string(attrs[GENL_BP_A_EID]);
 		eid_size = strlen(eid) + 1;
-
-		log_printf(LOG_INFO, "[size=%d] eid: %s\n", eid_size, eid);
-		log_printf(LOG_INFO, "[size=%d] payload: %s\n", payload_size, payload);
 
 		bp_send_cb(ctx, payload, payload_size, eid, eid_size);
 		break;
@@ -183,12 +179,6 @@ int nl_recvmsg_cb(struct nl_msg *msg, void *arg)
 		log_printf(LOG_ERROR, "unrecognized command\n");
 		break;
 	}
-	return 0;
-}
-
-int nl_disconnect(struct nl_sock *sock)
-{
-	nl_socket_free(sock);
 	return 0;
 }
 

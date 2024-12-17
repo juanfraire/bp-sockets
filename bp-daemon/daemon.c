@@ -123,7 +123,7 @@ int mainloop(int port)
 	/* Main event loop */
 	event_base_dispatch(base);
 	log_printf(LOG_INFO, "Main event loop terminated\n");
-	nl_disconnect(netlink_sock);
+	nl_socket_free(netlink_sock);
 
 	/* Cleanup */
 	// evconnlistener_free(listener); /* This also closes the socket due to our listener creation flags */
@@ -281,9 +281,6 @@ int bp_send_cb(tls_daemon_ctx_t *ctx, char *payload, int payload_size, char *eid
 	Sdr sdr;
 	Object bundlePayload;
 	Object bundleZco;
-
-	log_printf(LOG_INFO, "[size=%zu] eid: %s\n", eid_size, eid);
-	log_printf(LOG_INFO, "[size=%zu] payload: %s\n", payload_size, payload);
 
 	sdr = bp_get_sdr();
 	if (sdr == NULL)
